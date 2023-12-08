@@ -1,3 +1,15 @@
+# Data files
+data/
+
+# Swap files
+*.swp
+
+# Mac folder hidden files 
+.DS_Store
+
+# direnv files 
+.envrc 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -43,6 +55,12 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+<<<<<<< HEAD
+=======
+nohup.out
+logs.txt
+
+>>>>>>> f2899bb4c09048c4d91c11bd402d0f4913e933c2
 nosetests.xml
 coverage.xml
 *.cover
