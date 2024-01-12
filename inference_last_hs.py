@@ -7,16 +7,16 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
 DATASET = "imdb"
-MODEL_NAME = "asun17904/imdb-roberta-large"
-BASE_MODEL_NAME = "roberta-large"
+MODEL_NAME = "google/flan-t5-base"
+BASE_MODEL_NAME = "google/flan-t5-base"
 
 dataset = load_dataset(DATASET)
 
-test_dataset = dataset["train"]
+test_dataset = dataset["test"]
 labels = [v["label"] for v in test_dataset]
-pickle.dump(labels, open("/home/weicheng/data_interns/alan/kd/train_labels.pkl", "wb"))
-# shuffled_test = test_dataset.shuffle(seed=42)
-# test_dataset = shuffled_test.select(range(10000, len(test_dataset)))
+pickle.dump(labels, open("train_labels.pkl", "wb"))
+shuffled_test = test_dataset.shuffle(seed=42)
+test_dataset = shuffled_test.select(range(10000, len(test_dataset)))
 
 model_name = MODEL_NAME 
 tokenizer_name = BASE_MODEL_NAME
@@ -45,9 +45,9 @@ with torch.no_grad():
                 attention_mask=attention_mask,
                 output_hidden_states=True,
                 # output_attentions=True
-        ).hidden_states[-1]
+        ).hidden_states
         # append the average across the sequence dimension
-        outputs.append(torch.mean(lhs, axis=1))
+        outputs.append([torch.mean(v, axis=1) for v in lhs])
     # concat all of the last hidden states together 
     # outputs = torch.cat(outputs)
     # then average across the sequence dimension
@@ -57,7 +57,7 @@ with torch.no_grad():
 pickle.dump(
     outputs,
     open(
-        f"/home/weicheng/data_interns/alan/kd/{BASE_MODEL_NAME}-{DATASET}-train_hs.pkl",
+        f"{BASE_MODEL_NAME}-{DATASET}-train_hs.pkl",
         "wb+"
     )
 )

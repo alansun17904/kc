@@ -13,6 +13,7 @@ from concurrent import futures
 def cdist_l2(x1, x2):
     x1_norm = x1.pow(2).sum(dim=-1, keepdim=True)
     x2_norm = x2.pow(2).sum(dim=-1, keepdim=True)
+    print(x1_norm.shape, x2_norm.shape, x1.shape, x2.shape)
     res = torch.addmm(x2_norm.transpose(-2, -1), x1, x2.transpose(-2, -1), alpha=-2).add_(x1_norm)
     res = res.clamp_min_(1e-30).sqrt_()
     return res
@@ -32,10 +33,10 @@ def precompute_pdistance(activations, cache_dir, name):
     """Compute the pairwise distance between activations
     for each layer, then store in `fname` (Path obj.)"""
     acts = []
-    for i in range(len(activations[0][1])):
+    for i in range(len(activations[0])):
         layer_act = []
         for v in activations:
-            layer_act.append(v[1][i])
+            layer_act.append(v[i])
         acts.append(torch.cat(layer_act))
     for i, act in tqdm(enumerate(acts)):
         compute_cdist_layer(act, cache_dir / f"{name}-{i+1}.pth")
@@ -91,6 +92,10 @@ def main():
 
         # load all activations
         activations = pickle.load(open(SENT_DIR / f"{MODEL_NAME}-k0.pkl", "rb"))
+
+        print(len(activations))
+        print(len(activations[0]))
+
         precompute_pdistance(activations, CACHE_DIR, f"{MODEL_NAME}-cdist")
 
         # load the labels

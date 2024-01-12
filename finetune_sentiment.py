@@ -27,7 +27,7 @@ def split_dataset(dataset):
 
 def prepare_dataset(dataset, tokenizer):
     def tokenize(batch):
-        return tokenizer(batch["text"], padding=True, truncation=True)
+        return tokenizer(batch["text"], padding="max_length", truncation=True, max_length=512)
     tokenized_datasets = dataset.map(tokenize, batched=True)
     return tokenized_datasets
 
@@ -37,7 +37,7 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
         evaluation_strategy="epoch",
         hub_token=os.environ.get("HUB_TOKEN"),
         hub_model_id=f"imdb-{model_name}",
-        output_dir=f"/home/weicheng/data_interns/alan/kd/imdb-{model_name}",
+        output_dir=f"imdb-{model_name}",
         push_to_hub=True,
     )
     trainer = Trainer(
@@ -50,7 +50,7 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
     return trainer
 
 def main():
-    models = ["roberta-base", "roberta-large"]
+    models = ["xlnet-base-cased"]
     train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
     for model_name in models:
         model, tokenizer = load_model_tokenizer(model_name)
