@@ -22,7 +22,7 @@ class KnowledgeContinuousModel(nn.Module):
         x = self.model(
             input_ids=input_ids,
             labels=labels,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
             output_hidden_states=True,
         ).hidden_states
         # choose a random layer using the beta distribution and get
