@@ -2,7 +2,6 @@ import os
 import torch
 import torch.nn.functional as F
 import numpy as np
-import evaluate
 import argparse
 from datasets import load_dataset
 from model import KnowledgeContinuousModel
@@ -19,7 +18,7 @@ def prepare_dataset(tokenizer):
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    return metric.compute(predictions=predictions, references=labels)
+    return (predictions * labels) / len(labels)
 
 def split_dataset(dataset):
     train_dataset, test_dataset = dataset["train"], dataset["test"]
@@ -51,8 +50,8 @@ def prepare_trainer(model, train_dataset, valid_dataset, epochs=20):
     training_args = TrainingArguments(
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
-        hub_token=os.environ.get("HUB_TOKEN")
-        hub_model_id=f"imdb-kd-regularized"
+        hub_token=os.environ.get("HUB_TOKEN"),
+        hub_model_id=f"imdb-kd-regularized",
         push_to_hub=True,
         seed=42
     )
@@ -66,16 +65,15 @@ def prepare_trainer(model, train_dataset, valid_dataset, epochs=20):
     return trainer
 
 
-options = argparse.ArgumentParser()
-options.add_argument("dataset", type=str, help="any dataset that is in the huggingface dataset module")
-options.add_argument("model", type=str, help="name of the model (huggingface repo)")
-options.add_argument("alpha", type=float, help="parameter in the beta distribution for choosing hidden layer")
-options.add_argument("beta", type=float, help="parameter in the beta distribution for choosing the hidden layer")
-options.add_argument("-epochs", type=int, help="the number of training epochs")
+parser = argparse.ArgumentParser()
+parser.add_argument("dataset", type=str, help="any dataset that is in the huggingface dataset module")
+parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
+parser.add_argument("alpha", type=float, help="parameter in the beta distribution for choosing hidden layer")
+parser.add_argument("beta", type=float, help="parameter in the beta distribution for choosing the hidden layer")
+parser.add_argument("-epochs", type=int, help="the number of training epochs")
 
-options.parse_args()
+options = parser.parse_args()
 
-metric = evaluate("accuracy")
 tokenizer = AutoTokenizer.from_pretrained(options.model)
 model = AutoModelForSequenceClassification.from_pretrained(options.model)
 dataset = load_dataset(options.dataset)
