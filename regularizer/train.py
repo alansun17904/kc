@@ -51,8 +51,8 @@ def prepare_trainer(model, train_dataset, valid_dataset, epochs=20):
     training_args = TrainingArguments(
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
-        hub_token=os.environ.get("HUB_TOKEN")
-        hub_model_id=f"imdb-kd-regularized"
+        hub_token=os.environ.get("HUB_TOKEN"),
+        hub_model_id=f"imdb-kd-regularized",
         push_to_hub=True,
         seed=42
     )
@@ -88,7 +88,9 @@ trainer = prepare_dataset(
     valid_dataset
 )
 trainer.train()
-
+regularized_model = trainer.model.model
+# push this to hub too
+regularized_model.push_to_hub(f"imdb-kd-regularized-base")
 
 
 
