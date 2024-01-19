@@ -88,7 +88,9 @@ trainer = prepare_dataset(
     valid_dataset
 )
 trainer.train()
-
+regularized_model = trainer.model.model
+# push this to hub too
+regularized_model.push_to_hub(f"imdb-kd-regularized-base")
 
 
 
