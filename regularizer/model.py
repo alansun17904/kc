@@ -14,6 +14,7 @@ class KnowledgeContinuousModel(nn.Module):
         :param alpha: hyperparameter for the beta distribution
         :param beta: hyperparameter for the beta distribution
         """
+        super().__init__()
         self.model = model
         self.alpha = alpha
         self.beta = beta
@@ -24,12 +25,12 @@ class KnowledgeContinuousModel(nn.Module):
             labels=labels,
             attention_mask=attention_mask,
             output_hidden_states=True,
-        ).hidden_states
+        )
         # choose a random layer using the beta distribution and get
         # the hidden activations from that hidden layer
         layer = int(
             len(x.hidden_states) * np.random.beta(self.alpha, self.beta)
         )
-        return x.logits, torch.mean(x.hidden_states[layer],axis=1)
+        return torch.mean(x.hidden_states[layer],axis=1), x.logits
 
 
