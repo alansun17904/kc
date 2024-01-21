@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-import transformers
+from transformers import PreTrainedModel
 
 
 class KnowledgeContinuousModel(nn.Module):
@@ -15,10 +15,14 @@ class KnowledgeContinuousModel(nn.Module):
         :param beta: hyperparameter for the beta distribution
         """
         super().__init__()
+        self.inference = False
         self.model = model
         self.alpha = alpha
         self.beta = beta
     
+    def toggle_inference(self):
+        self.inference = not self.inference 
+
     def forward(self, input_ids, labels, attention_mask=None):
         x = self.model(
             input_ids=input_ids,
@@ -31,6 +35,8 @@ class KnowledgeContinuousModel(nn.Module):
         layer = int(
             len(x.hidden_states) * np.random.beta(self.alpha, self.beta)
         )
+        if self.inference:
+            return x
         return torch.mean(x.hidden_states[layer],axis=1), x.logits
 
 

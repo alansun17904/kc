@@ -1,5 +1,6 @@
 import os
 import torch
+import evaluate
 import torch.nn.functional as F
 import numpy as np
 import argparse
@@ -8,19 +9,18 @@ from model import KnowledgeContinuousModel
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 
 
+metric = evaluate.load("accuracy")
+
 def prepare_dataset(dataset, tokenizer):
     def tokenize(batch):
         return tokenizer(batch["text"], padding=True, truncation=True)
     tokenized_dataset = dataset.map(tokenize, batched=True)
     return tokenized_dataset
 
-
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    return {
-        "accuracy": np.sum((predictions * labels)) / len(labels)
-    }
+    return metric.compute(predictions=predictions, references=labels)
 
 def split_dataset(dataset):
     train_dataset, test_dataset = dataset["train"], dataset["test"]
@@ -33,12 +33,17 @@ def split_dataset(dataset):
 # are doing this.
 # TODO: also need to specify a lambda value on the regularizer term
 class KnowledgeRegularizedTrainer(Trainer):
-    # def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
-    #     labels = inputs.get("labels", None)
-    #     if prediction_loss_only:
-    #         return (self.compute_loss(model, inputs), None, None)
-    #     logits, hs = model(**inputs)
-    #     return (None, logits, labels)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        with torch.no_grad():
+            labels = inputs.get("labels", None)
+            prediction_loss, model_output = self.compute_loss(model, inputs, return_outputs=True)
+            _, logits = model_output
+            if prediction_loss_only:
+                return (prediction_loss, None, None)
+            return (prediction_loss, logits, labels)
 
     def calc_knowledge_discontinuities(self, class_losses, hs):
         dist = torch.cdist(hs,hs) + 1e-2
@@ -49,25 +54,26 @@ class KnowledgeRegularizedTrainer(Trainer):
         labels = inputs.get("labels")
         outputs = model(**inputs)
         hs, logits = outputs
-        # labels = F.one_hot(labels,num_classes=2).float()
-        # print(labels, logits)
+        labels = F.one_hot(labels,num_classes=2).float()
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
-        # print(class_loss)
-        # print(hs.shape)
-        # kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        class_loss = class_loss.reshape(-1, 1)
+        kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
         if return_outputs:
-            return torch.sum(class_loss), outputs#  + 0 * kd_score, outputs
-        return torch.sum(class_loss)#  + 0 * kd_score
+            return torch.sum(class_loss) + 5e-3 * kd_score, outputs
+        return torch.sum(class_loss) + 5e-3 * kd_score
 
-def prepare_trainer(model, train_dataset, valid_dataset, epochs=20):
+def prepare_trainer(model_name, model, train_dataset, valid_dataset, epochs=20):
     training_args = TrainingArguments(
         output_dir="imdb-kd-regularized",
+        per_device_train_batch_size=8,
+        #gradient_accumulation_steps=4,
         learning_rate=5e-5,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
+        # eval_accumulation_steps=4,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-kd-regularized",
+        hub_model_id=f"imdb-{model_name}-kd-regularized",
         push_to_hub=True,
         save_steps=2000,
         seed=42
@@ -92,26 +98,23 @@ parser.add_argument("-epochs", type=int, help="the number of training epochs")
 options = parser.parse_args()
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
-model = AutoModelForSequenceClassification.from_pretrained(options.model)
-for name, W in model.named_parameters():
-    if not W.requires_grad:
-        print(f"gradient not enabled in layer: {name}")
-print(model.bert.encoder.layer[0].attention)
-print(model.bert.encoder.layer[0].attention.self.query.weight.requires_grad)
+pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model)
 dataset = load_dataset(options.dataset)
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
 train_dataset = prepare_dataset(train_dataset, tokenizer)
 valid_dataset = prepare_dataset(valid_dataset, tokenizer)
 trainer = prepare_trainer(
-    KnowledgeContinuousModel(model, options.alpha, options.beta),
+    options.model,
+    KnowledgeContinuousModel(pretrained_model, options.alpha, options.beta),
     train_dataset,
     valid_dataset,
     epochs=options.epochs
 )
+# trainer.evaluate()
 trainer.train()
 regularized_model = trainer.model.model
 # push this to hub too
-regularized_model.push_to_hub(f"imdb-kd-regularized-base")
+regularized_model.save_pretrained(f"imdb-{options.model}-kd-regularized-base")
 
 
 
