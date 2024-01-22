@@ -9,8 +9,8 @@ from textattack.models.wrappers import HuggingFaceModelWrapper
 
 
 DATASET = "asun17904/imdb-test"
-MODEL_NAME = "kennethge123/imdb-t5-small"
-BASE_MODEL_NAME = "t5-small"
+MODEL_NAME = "asun17904/imdb-bert-base-uncased-kd-regularized"
+BASE_MODEL_NAME = "bert-base-uncased"
 CHECKPOINT_DIR = "data/adversarial-attacks/"
 RECIPE = recipes.TextFoolerJin2019
 
@@ -24,7 +24,7 @@ attack_args = AttackArgs(
     num_examples=-1,
     checkpoint_interval=1000,
     checkpoint_dir=CHECKPOINT_DIR,
-    log_to_csv=f"tf-{BASE_MODEL_NAME}.csv",
+    log_to_csv=f"tf-{BASE_MODEL_NAME}-regularized.csv",
     query_budget=300,
     parallel=True,
     num_workers_per_device=4

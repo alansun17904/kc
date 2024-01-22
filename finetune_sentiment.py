@@ -12,6 +12,9 @@ metric = evaluate.load("accuracy")
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
+    #return {
+    #    "accuracy": np.sum(labels * predictions) / len(labels)
+    #}
     return metric.compute(predictions=predictions, references=labels)
 
 def load_model_tokenizer(model_name):
@@ -33,6 +36,7 @@ def prepare_dataset(dataset, tokenizer):
 
 def prepare_trainer(model_name, model, train_dataset, valid_dataset):
     training_args = TrainingArguments(
+        learning_rate=1e-4,
         num_train_epochs=20,
         evaluation_strategy="epoch",
         hub_token=os.environ.get("HUB_TOKEN"),
@@ -50,7 +54,7 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
     return trainer
 
 def main():
-    models = ["xlnet-base-cased"]
+    models = ["bert-base-uncased"]
     train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
     for model_name in models:
         model, tokenizer = load_model_tokenizer(model_name)
