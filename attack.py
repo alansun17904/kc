@@ -27,13 +27,9 @@ attack_args = AttackArgs(
     log_to_csv=f"tf-{BASE_MODEL_NAME}-regularized.csv",
     query_budget=300,
     parallel=True,
-    num_workers_per_device=4
+    num_workers_per_device=4,
 )
 
-attacker = Attacker(
-    RECIPE.build(model),
-    dataset,
-    attack_args
-)
+attacker = Attacker(RECIPE.build(model), dataset, attack_args)
 
 attack.attack_dataset()

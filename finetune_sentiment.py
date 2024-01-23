@@ -6,33 +6,43 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import Trainer, TrainingArguments
 
 
-dataset = load_dataset('imdb')
+dataset = load_dataset("imdb")
 metric = evaluate.load("accuracy")
+
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    #return {
+    # return {
     #    "accuracy": np.sum(labels * predictions) / len(labels)
-    #}
+    # }
     return metric.compute(predictions=predictions, references=labels)
+
 
 def load_model_tokenizer(model_name):
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     return model, tokenizer
 
+
 def split_dataset(dataset):
     train_dataset, test_dataset = dataset["train"], dataset["test"]
     shuffled_test = test_dataset.shuffle(seed=42)
-    valid_dataset, test_dataset = shuffled_test.select(range(10000)), shuffled_test.select(range(10000, len(test_dataset)))
+    valid_dataset, test_dataset = shuffled_test.select(
+        range(10000)
+    ), shuffled_test.select(range(10000, len(test_dataset)))
     return train_dataset, valid_dataset, test_dataset
+
 
 def prepare_dataset(dataset, tokenizer):
     def tokenize(batch):
-        return tokenizer(batch["text"], padding="max_length", truncation=True, max_length=512)
+        return tokenizer(
+            batch["text"], padding="max_length", truncation=True, max_length=512
+        )
+
     tokenized_datasets = dataset.map(tokenize, batched=True)
     return tokenized_datasets
+
 
 def prepare_trainer(model_name, model, train_dataset, valid_dataset):
     training_args = TrainingArguments(
@@ -52,6 +62,7 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
         compute_metrics=compute_metrics,
     )
     return trainer
+
 
 def main():
     models = ["bert-base-uncased"]

@@ -12,7 +12,3 @@ import matplotlib.pyplot as plt
 DATA_DIR = sys.argv[1]
 MODEL_NAME = sys.argv[2]
 TOTAL_LAYERS = len(os.listdir(Path(DATA_DIR) / MODEL_NAME))
-
-
-
-

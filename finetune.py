@@ -6,38 +6,46 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import Trainer, TrainingArguments
 
 
-dataset = load_dataset('imdb')
+dataset = load_dataset("imdb")
 metric = evaluate.load("accuracy")
+
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
-    print('\n\n\n\n\n')
+    print("\n\n\n\n\n")
     print(len(logits))
     print(len(logits[0]))
     print(len(logits[1]))
     print(logits[0].shape)
     print(logits[1].shape)
-    print('\n\n\n\n\n\n')
+    print("\n\n\n\n\n\n")
     logits = logits[0]
     predictions = np.argmax(logits, axis=-1)
     return metric.compute(predictions=predictions, references=labels)
+
 
 def load_model_tokenizer(model_name):
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     return model, tokenizer
 
+
 def split_dataset(dataset):
     train_dataset, test_dataset = dataset["train"], dataset["test"]
     shuffled_test = test_dataset.shuffle(seed=42)
-    valid_dataset, test_dataset = shuffled_test.select(range(10000)), shuffled_test.select(range(10000, len(test_dataset)))
+    valid_dataset, test_dataset = shuffled_test.select(
+        range(10000)
+    ), shuffled_test.select(range(10000, len(test_dataset)))
     return train_dataset, valid_dataset, test_dataset
+
 
 def prepare_dataset(dataset, tokenizer):
     def tokenize(batch):
         return tokenizer(batch["text"], padding=True, max_length=4096, truncation=True)
+
     tokenized_datasets = dataset.map(tokenize, batched=True)
     return tokenized_datasets
+
 
 def prepare_trainer(model_name, model, train_dataset, valid_dataset):
     training_args = TrainingArguments(
@@ -47,8 +55,8 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
         hub_model_id=f"imdb-{model_name}",
         output_dir=f"data/kd/imdb-{model_name}",
         push_to_hub=True,
-        seed=42, # change this seed
-        use_cpu=True
+        seed=42,  # change this seed
+        use_cpu=True,
     )
     trainer = Trainer(
         model=model,
@@ -58,6 +66,7 @@ def prepare_trainer(model_name, model, train_dataset, valid_dataset):
         compute_metrics=compute_metrics,
     )
     return trainer
+
 
 def main():
     models = ["xlnet-base-cased"]

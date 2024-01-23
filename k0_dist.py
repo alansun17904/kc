@@ -10,7 +10,8 @@ from numba import jit
 from numba import prange
 from numba_progress import ProgressBar
 
-print('start')
+print("start")
+
 
 class ConstantIterator:
     def __init__(self, value):
@@ -29,7 +30,7 @@ LAYER_INDEX = int(sys.argv[3])
 
 labels = pickle.load(open(DATA_DIR / "labels.pkl", "rb"))
 
-# convert all of the labels to ints 
+# convert all of the labels to ints
 labels = [int(v) for v in labels]
 
 # load the activation data and the predictions
@@ -42,19 +43,24 @@ for i in range(len(activations[0][1])):  # load activations and organize them by
         layer_act.append(v[1][i])
     acts.append(torch.cat(layer_act))
 
+
 # apply softmax to the logits to get raw probabilities
 def softmax(x):
-    return torch.exp(x) / torch.sum(torch.exp(x), axis=1).reshape(-1,1)
+    return torch.exp(x) / torch.sum(torch.exp(x), axis=1).reshape(-1, 1)
 
-print('stuff 2')
+
+print("stuff 2")
 
 # we only care about the probabilites that correspond to the correct label
-predicted_probs = softmax(logits)[torch.arange(len(logits)),labels]
+predicted_probs = softmax(logits)[torch.arange(len(logits)), labels]
 predicted_probs = predicted_probs.cpu().detach().numpy()
 
-# norm the activations 
-normed_acts = acts[LAYER_INDEX] / np.max(np.linalg.norm(acts[LAYER_INDEX], axis=1).reshape(-1, 1))
+# norm the activations
+normed_acts = acts[LAYER_INDEX] / np.max(
+    np.linalg.norm(acts[LAYER_INDEX], axis=1).reshape(-1, 1)
+)
 normed_acts = normed_acts.cpu().detach().numpy()
+
 
 # Decorate the function with @jit to enable Just-In-Time compilation
 # @jit(nopython=True)
@@ -70,6 +76,7 @@ def calculate_mags(normed_acts):
 
     return mags
 
+
 # Call the optimized function
 mags = calculate_mags(normed_acts)
 
@@ -83,7 +90,8 @@ mags = calculate_mags(normed_acts)
 # cache[6] -- index in cache[1]
 cache = [[[], mags[i], [], [], 0, 0, 0] for i in range(len(normed_acts))]
 
-#@jit(nopython=True, cache=True)
+
+# @jit(nopython=True, cache=True)
 def check_k0(x, x_loss, cache_idx, mags, normed_acts, loss, delta=0.1, i=0):
     global cache
 
@@ -95,7 +103,9 @@ def check_k0(x, x_loss, cache_idx, mags, normed_acts, loss, delta=0.1, i=0):
                 # cache[cache_idx][3].append(loss[idx])
                 # cache[cache_idx][2].append(idx)
                 cache[cache_idx][4] += 1
-                cache[cache_idx][5] += np.abs(x_loss - loss[cache[cache_idx][1][idx][1]]) / (1 + item)
+                cache[cache_idx][5] += np.abs(
+                    x_loss - loss[cache[cache_idx][1][idx][1]]
+                ) / (1 + item)
                 if idx == len(cache[cache_idx][1]) - 1:
                     cache[cache_idx][6] = idx + 1
             else:
@@ -103,15 +113,16 @@ def check_k0(x, x_loss, cache_idx, mags, normed_acts, loss, delta=0.1, i=0):
                 cache[cache_idx][6] = idx
                 break
     # cache[cache_idx][1] = new_cache_1
-    if cache[cache_idx][4] == 0:# len(cache[cache_idx][0]) == 0:
+    if cache[cache_idx][4] == 0:  # len(cache[cache_idx][0]) == 0:
         # is this safe and intended?
         return 0
-    scored_mean = cache[cache_idx][5] / cache[cache_idx][4]#np.mean(
+    scored_mean = cache[cache_idx][5] / cache[cache_idx][4]  # np.mean(
     #    (np.abs(x_loss - np.array(cache[cache_idx][3])) / (1 + np.array(cache[cache_idx][0]))).numpy()
-    #)
-    return scored_mean 
+    # )
+    return scored_mean
 
-print('start calculating k0')
+
+print("start calculating k0")
 
 # get the number of discontinuities as a function of delta
 deltas = np.linspace(0.001, 0.999, 25)
@@ -120,14 +131,18 @@ model_dir = DATA_DIR / f"{MODEL_NAME}-k0-l{LAYER_INDEX + 1}-ep"
 if not os.path.exists(model_dir):
     os.mkdir(model_dir)
 
+
 def parallel_check_k0(enumerated, delta):
     global predicted_probs
     global mags
     global normed_acts
     i, row = enumerated
-    value = check_k0(row, predicted_probs[i], i, mags[i], normed_acts, predicted_probs, delta, i) 
-    
+    value = check_k0(
+        row, predicted_probs[i], i, mags[i], normed_acts, predicted_probs, delta, i
+    )
+
     return i, value
+
 
 enumerated = []
 enumerated_vals = []
@@ -140,7 +155,8 @@ for i, k in enumerate(normed_acts):
 
 discontinuity = np.zeros(len(predicted_probs))
 
-#@jit(nopython=True, cache=True)
+
+# @jit(nopython=True, cache=True)
 def check_k0_numba(delta, progress_proxy):
     global predicted_probs
     global mags
@@ -151,29 +167,34 @@ def check_k0_numba(delta, progress_proxy):
     for i in range(len(enumerated_idx)):
         i = enumerated_idx[i]
         row = enumerated_vals[i]
-        value = check_k0(row, predicted_probs[i], i, mags[i], normed_acts, predicted_probs, delta, i)
+        value = check_k0(
+            row, predicted_probs[i], i, mags[i], normed_acts, predicted_probs, delta, i
+        )
         discontinuity[i] = value
         progress_proxy.update(1)
+
 
 count = 1
 for delta in tqdm(deltas):
     # do parallel processing if delta < 0.3 -- this is faster parallel, whereas later on it's faster sequential due to overhead
-    
+
     if delta <= 0.85:
         with futures.ProcessPoolExecutor() as pool:
-            for i, value in tqdm(pool.map(parallel_check_k0, enumerated, ConstantIterator(delta)), desc=f"delta={delta:.2f}"):
+            for i, value in tqdm(
+                pool.map(parallel_check_k0, enumerated, ConstantIterator(delta)),
+                desc=f"delta={delta:.2f}",
+            ):
                 discontinuity[i] = value
-    #with ProgressBar(total=15000) as progress:
+    # with ProgressBar(total=15000) as progress:
     #    check_k0_numba(delta, progress)
     else:
         for i in tqdm(range(len(enumerated))):
             i, value = parallel_check_k0(enumerated[i], delta)
             discontinuity[i] = value
     pickle.dump(
-        discontinuity,
-        open(model_dir / f"{MODEL_NAME}-k0-delta-{delta}.pkl", "wb+")
+        discontinuity, open(model_dir / f"{MODEL_NAME}-k0-delta-{delta}.pkl", "wb+")
     )
-    print(f'finished {delta}')
+    print(f"finished {delta}")
     count += 1
     # witih ThreadPoolExecutor(max_workers=1) as executor:
     #     futures = [executor.submit(check_k0, x, normed_acts, predicted_probs, delta) for i, x in enumerate(normed_acts)]
