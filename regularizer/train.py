@@ -6,7 +6,7 @@ import numpy as np
 import argparse
 from datasets import load_dataset
 from model import KnowledgeContinuousModel
-from huggingface_hub import ModelCard
+from huggingface_hub import ModelCard, create_repo
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
@@ -81,9 +81,10 @@ Extended Logs:
 |--|--|--|
 """
         for epoch in state.log_history:
-            content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
+            if "eval_loss" in epoch:
+                content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
         card = ModelCard(content)
-        card.push_to_hub(f"asun17904/{args.hub_model_id}")
+        card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
 
 
 class KnowledgeRegularizedTrainer(Trainer):
@@ -135,7 +136,7 @@ def prepare_trainer(
 ):
     training_args = TrainingArguments(
         output_dir="imdb-kd-regularized",
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=16,
         # gradient_accumulation_steps=4,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
@@ -181,8 +182,15 @@ parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
+parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder")
 
 options = parser.parse_args()
+
+create_repo(
+    f"asun17904/imdb-{options.model}-kd-regularized-l2",
+    token=os.environ["HUB_TOKEN"],
+    exist_ok=True
+)
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
 pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model)
@@ -201,6 +209,7 @@ trainer = prepare_trainer(
         pretrained_model,
         options.alpha,
         options.beta,
+        options.is_ed,
     ),
     train_dataset,
     valid_dataset,
