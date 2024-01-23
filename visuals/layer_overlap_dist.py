@@ -14,15 +14,16 @@ MODEL_NAME = sys.argv[2]
 TOTAL_LAYERS = len(os.listdir(Path(DATA_DIR) / MODEL_NAME))
 
 GRID_SIZE = 100
-eps = delt = np.linspace(0,1,GRID_SIZE)
-ticks = [round(v,1) for v in np.linspace(0,1,10)]
+eps = delt = np.linspace(0, 1, GRID_SIZE)
+ticks = [round(v, 1) for v in np.linspace(0, 1, 10)]
 
 # note that the first dimension corresponds to a specific delta-value then
 # the second dimension correspodns to a specific epsilon-value.
 
+
 def compute_overlap_disconts(layer_1, layer_2):
     global GRID_SIZE
-    grid = np.zeros((GRID_SIZE,GRID_SIZE))
+    grid = np.zeros((GRID_SIZE, GRID_SIZE))
     for i in tqdm.tqdm(range(GRID_SIZE)):
         i_scaled = i * (len(layer_1) // GRID_SIZE)
         l1i, l2i = layer_1[i_scaled].cpu(), layer_2[i_scaled].cpu()
@@ -32,9 +33,8 @@ def compute_overlap_disconts(layer_1, layer_2):
             if len(l1_disconts) == len(l2_disconts) == 0:
                 grid[j][i] = 1
                 continue
-            grid[j][i] = (
-                len(np.intersect1d(l1_disconts, l2_disconts)) / 
-                max(len(np.union1d(l1_disconts, l2_disconts)), 1)
+            grid[j][i] = len(np.intersect1d(l1_disconts, l2_disconts)) / max(
+                len(np.union1d(l1_disconts, l2_disconts)), 1
             )
     grid = np.flip(grid, axis=0)
     return grid
@@ -43,12 +43,14 @@ def compute_overlap_disconts(layer_1, layer_2):
 def plot_grid(grid, l1_index, l2_index):
     global MODEL_NAME, GRID_SIZE
     ax = sns.heatmap(grid, cbar=False)
-    ax.set_title(f"Overlap of Discontinuities Between Layers {l1_index+1}, {l2_index+1}")
-    ax.set_yticks([v*GRID_SIZE for v in ticks])
-    ax.set_xticks([v*GRID_SIZE for v in ticks])
+    ax.set_title(
+        f"Overlap of Discontinuities Between Layers {l1_index+1}, {l2_index+1}"
+    )
+    ax.set_yticks([v * GRID_SIZE for v in ticks])
+    ax.set_xticks([v * GRID_SIZE for v in ticks])
     ax.set_yticklabels(ticks[::-1])
     ax.set_xticklabels(ticks)
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
     ax.set_ylabel("$\epsilon$")
     ax.set_xlabel("$\delta$")
     plt.savefig(f"data/k0/figures/{MODEL_NAME}-{l1_index+1}-{l2_index+1}.pdf")

@@ -23,12 +23,14 @@ GRID_SIZE = 100
 
 # load the adversarial attacks file
 successes = pickle.load(
-    open(f"data/adversarial-attacks/{ATTACK_METHOD}-{MODEL_NAME}_preprocessed.pkl", "rb")
+    open(
+        f"data/adversarial-attacks/{ATTACK_METHOD}-{MODEL_NAME}_preprocessed.pkl", "rb"
+    )
 )
 
 # load the data file
-eps = delt = np.linspace(0,1,GRID_SIZE)
-ticks = [round(v,1) for v in np.linspace(0,1,10)]
+eps = delt = np.linspace(0, 1, GRID_SIZE)
+ticks = [round(v, 1) for v in np.linspace(0, 1, 10)]
 
 # note that the first dimension corresponds to a specific delta-value then
 # the second dimension correspodns to a specific epsilon-value.
@@ -37,10 +39,7 @@ fig, axs = plt.subplots(
     N_COLS,
     sharex=True,
     sharey=True,
-    figsize=(
-        N_ROWS * subplot_height,
-        N_COLS * subplot_height
-    ),
+    figsize=(N_ROWS * subplot_height, N_COLS * subplot_height),
 )
 
 plt.tight_layout()
@@ -52,18 +51,13 @@ for l in range(TOTAL_LAYERS):
         continue
     disconts = torch.load(fname)
     disconts = [v.cpu() for v in disconts]
-    grid = np.zeros((GRID_SIZE,GRID_SIZE))
+    grid = np.zeros((GRID_SIZE, GRID_SIZE))
     for i in tqdm.tqdm(range(GRID_SIZE), desc=f"Generating layer {l+1}"):
         # i = indexing delta
         # j = indexing eps
         i_scaled = i * (len(disconts) // GRID_SIZE)
         for j in range(GRID_SIZE):
-            grid[j][i] = np.log(
-                np.dot(
-                    disconts[i_scaled] >= eps[j],
-                    successes
-                ) + 1
-            )
+            grid[j][i] = np.log(np.dot(disconts[i_scaled] >= eps[j], successes) + 1)
     grid = np.flip(grid, axis=0)
     ax = sns.heatmap(
         grid,
@@ -71,12 +65,12 @@ for l in range(TOTAL_LAYERS):
         cbar=False,
     )
     ax.set_title(f"Layer {l+1}", pad=0)
-    ax.set_yticks([v*GRID_SIZE for v in ticks])
-    ax.set_xticks([v*GRID_SIZE for v in ticks])
-    ax.tick_params(which='both', width=0.25, length=1)
+    ax.set_yticks([v * GRID_SIZE for v in ticks])
+    ax.set_xticks([v * GRID_SIZE for v in ticks])
+    ax.tick_params(which="both", width=0.25, length=1)
     ax.set_yticklabels(ticks[::-1])
     ax.set_xticklabels(ticks)
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
     # only label the y axis for the left-hand most plots
     if l % N_COLS == 0:
         ax.set_ylabel("$\epsilon$")
@@ -84,10 +78,11 @@ for l in range(TOTAL_LAYERS):
         ax.set_xlabel("$\delta$")
 
 # make the colorbar based on the last heatmap
-cbar = plt.colorbar(ax.get_children()[0], ax=axs, orientation='vertical', fraction=0.05, pad=0.1)
+cbar = plt.colorbar(
+    ax.get_children()[0], ax=axs, orientation="vertical", fraction=0.05, pad=0.1
+)
 
 for i in range(TOTAL_LAYERS, len(axs.flat)):
     axs.flat[i].set_axis_off()
 
 plt.savefig(f"data/k0/figures/{MODEL_NAME}-adv-intersects.pdf")
-
