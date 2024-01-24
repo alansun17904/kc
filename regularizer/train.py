@@ -81,7 +81,7 @@ Extended Logs:
 |--|--|--|
 """
         for epoch in state.log_history:
-            if "eval_loss" in epoch:
+            if "eval_loss" in epoch.keys():
                 content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
         card = ModelCard(content)
         card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])

@@ -24,19 +24,19 @@ def prepare_dataset(dataset, tokenizer, task, is_gpt=False):
         tokenizer.pad_token = tokenizer.eos_token
     if task == "mnli":
         def tokenize(batch):
-            return tokenizer(batch["premise"], batch["hypothesis"], padding=True, truncation=True)
+            return tokenizer(batch["premise"], batch["hypothesis"], padding="max_length", truncation=True)
     elif task == "cola":
         def tokenize(batch):
-            return tokenizer(batch["sentence"], padding=True, truncation=True)
+            return tokenizer(batch["sentence"], padding="max_length", truncation=True)
     elif task == "mrpc" or task == "wnli" or task == "rte":
         def tokenize(batch):
-            return tokenizer(batch["sentence1"], batch["sentence2"], padding=True, truncation=True)
+            return tokenizer(batch["sentence1"], batch["sentence2"], padding="max_length", truncation=True)
     elif task == "qqp":
         def tokenize(batch):
-            return tokenizer(batch["question1"], batch["question2"], padding=True, truncation=True)
+            return tokenizer(batch["question1"], batch["question2"], padding="max_length", truncation=True)
     elif task == "qnli":
         def tokenize(batch):
-            return tokenizer(batch["question"], batch["sentence"], padding=True, truncation=True)
+            return tokenizer(batch["question"], batch["sentence"], padding="max_length", truncation=True)
     tokenized_dataset = dataset.map(tokenize, batched=True)
     return tokenized_dataset
 
@@ -51,11 +51,11 @@ def split_dataset(dataset, task):
     if task == "mnli":
         return (
             dataset["train"],
-            dataset["valid_matched"],
+            dataset["validation_matched"],
             dataset["test_matched"]
         )
     else:
-        return dataset["train"], dataset["valid"], dataset["test"]
+        return dataset["train"], dataset["validation"], dataset["test"]
 
 
 class LoggingCallback(TrainerCallback):
@@ -106,7 +106,7 @@ class KnowledgeRegularizedTrainer(Trainer):
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         with torch.no_grad():
-            labels = inputs.get("label", None)
+            labels = inputs.get("labels", None)
             prediction_loss, model_output = self.compute_loss(
                 model, inputs, return_outputs=True
             )
@@ -121,10 +121,9 @@ class KnowledgeRegularizedTrainer(Trainer):
         return torch.sum(loss_dist / dist)
 
     def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.get("label")
+        labels = inputs.get("labels")
         outputs = model(**inputs)
         hs, logits = outputs
-        labels = F.one_hot(labels, num_classes=2).float()
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
         class_loss = class_loss.reshape(-1, 1)
@@ -135,6 +134,7 @@ class KnowledgeRegularizedTrainer(Trainer):
 
 
 def prepare_trainer(
+    task,
     model_name,
     model,
     train_dataset,
@@ -148,7 +148,7 @@ def prepare_trainer(
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir="imdb-kd-regularized",
+        output_dir=f"glue-{task}-{model_name}-kd",
         per_device_train_batch_size=16,
         # gradient_accumulation_steps=4,
         learning_rate=learning_rate,
@@ -157,7 +157,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-{model_name}-kd-regularized-l2",
+        hub_model_id=f"glue-{task}-{model_name}-regularized-l2",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -193,15 +193,15 @@ parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
-parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder")
+parser.add_argument("-encoder_decoder", type=bool, help="if the model is an encoder-decoder", default=False)
 
 options = parser.parse_args()
 
-create_repo(
-    f"asun17904/glue-{options.task}-{options.model}-kd-regularized-l2",
-    token=os.environ["HUB_TOKEN"],
-    exist_ok=True
-)
+#create_repo(
+#    f"asun17904/glue-{options.task}-{options.model}-kd-regularized-l2",
+#    token=os.environ["HUB_TOKEN"],
+#    exist_ok=True
+#)
 
 # based on the task, determine the number of labels
 if options.task == "mnli":
@@ -216,17 +216,24 @@ pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.mo
 if options.model == "gpt2":
     pretrained_model.config.pad_token_id = pretrained_model.config.eos_token_id
 
-dataset = load_dataset(options.dataset, options.task)
+print("Is Encoder-Decoder Model:", options.encoder_decoder)
+
+dataset = load_dataset("glue", options.task)
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset, options.task)
 train_dataset = prepare_dataset(train_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
 valid_dataset = prepare_dataset(valid_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
+
+# train_dataset = train_dataset.select(range(4))
+#valid_dataset = valid_dataset.select(range(4))
+
 trainer = prepare_trainer(
+    options.task,
     options.model,
     KnowledgeContinuousModel(
         pretrained_model,
         options.alpha,
         options.beta,
-        options.is_ed,
+        options.encoder_decoder,
     ),
     train_dataset,
     valid_dataset,
