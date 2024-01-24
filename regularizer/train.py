@@ -223,6 +223,6 @@ trainer = prepare_trainer(
 )
 # trainer.evaluate()
 trainer.train()
-regularized_model = trainer.model.model
+# regularized_model = trainer.model.model
 # push this to hub too
-regularized_model.save_pretrained(f"imdb-{options.model}-kd-regularized-base-l2")
+# regularized_model.save_pretrained(f"imdb-{options.model}-kd-regularized-base-l2")
