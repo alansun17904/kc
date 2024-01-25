@@ -81,7 +81,7 @@ Extended Logs:
 |--|--|--|
 """
         for epoch in state.log_history:
-            if "eval_loss" in epoch.keys():
+            if "eval_loss" in epoch:
                 content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
         card = ModelCard(content)
         card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
@@ -187,7 +187,7 @@ parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decode
 options = parser.parse_args()
 
 create_repo(
-    f"asun17904/imdb-{options.model}-kd-regularized-l2",
+    f"asun17904/imdb-{options.model}-reg-a{options.alpha}b{options.beta}",
     token=os.environ["HUB_TOKEN"],
     exist_ok=True
 )
