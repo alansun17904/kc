@@ -23,7 +23,7 @@ def prepare_dataset(dataset, tokenizer, is_gpt=False):
     if is_gpt:
         tokenizer.pad_token = tokenizer.eos_token
     def tokenize(batch):
-        return tokenizer(batch["premise"], batch["hypothesis"], padding=True, truncation=True)
+        return tokenizer(batch["premise"], batch["hypothesis"], padding="max_length", truncation=True)
     tokenized_dataset = dataset.map(tokenize, batched=True)
     return tokenized_dataset
 
@@ -91,7 +91,7 @@ class KnowledgeRegularizedTrainer(Trainer):
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         with torch.no_grad():
-            labels = inputs.get("label", None)
+            labels = inputs.get("labels", None)
             prediction_loss, model_output = self.compute_loss(
                 model, inputs, return_outputs=True
             )
@@ -106,10 +106,9 @@ class KnowledgeRegularizedTrainer(Trainer):
         return torch.sum(loss_dist / dist)
 
     def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.get("label")
+        labels = inputs.get("labels")
         outputs = model(**inputs)
         hs, logits = outputs
-        labels = F.one_hot(labels, num_classes=2).float()
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
         class_loss = class_loss.reshape(-1, 1)
@@ -120,6 +119,7 @@ class KnowledgeRegularizedTrainer(Trainer):
 
 
 def prepare_trainer(
+    round_number,
     model_name,
     model,
     train_dataset,
@@ -133,7 +133,7 @@ def prepare_trainer(
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir=f"anli-{model_name}-reg",
+        output_dir=f"anliR{round_number}-{model_name}-reg",
         per_device_train_batch_size=16,
         # gradient_accumulation_steps=4,
         learning_rate=learning_rate,
@@ -142,7 +142,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"anli-{model_name}-reg",
+        hub_model_id=f"anliR{round_number}-{model_name}-reg",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -161,7 +161,7 @@ def prepare_trainer(
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("task", type=str, help="name of the glue task being run")
+parser.add_argument("round", type=int, help="round of anli task")
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
 parser.add_argument(
     "alpha",
@@ -178,7 +178,7 @@ parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
-parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder")
+parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder", default=False)
 
 options = parser.parse_args()
 
@@ -189,12 +189,19 @@ pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.mo
 if options.model == "gpt2":
     pretrained_model.config.pad_token_id = pretrained_model.config.eos_token_id
 
-dataset = load_dataset(options.dataset, options.task)
-train_dataset, valid_dataset, test_dataset = split_dataset(dataset, options.task)
-train_dataset = prepare_dataset(train_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
-valid_dataset = prepare_dataset(valid_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
-test_dataset = prepare_dataset(valid_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
+dataset = load_dataset("anli")
+train_dataset, valid_dataset, test_dataset = split_dataset(dataset, options.round)
+train_dataset = prepare_dataset(train_dataset, tokenizer, is_gpt=options.model=="gpt2")
+valid_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
+test_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
+
+# train_dataset = train_dataset.select(range(20))
+# valid_dataset = valid_dataset.select(range(20))
+# test_dataset = test_dataset.select(range(20))
+
+
 trainer = prepare_trainer(
+    options.round,
     options.model,
     KnowledgeContinuousModel(
         pretrained_model,
@@ -215,8 +222,11 @@ trainer = prepare_trainer(
 # trainer.evaluate()
 trainer.train()
 test_results = trainer.predict(test_dataset)
-card = ModelCard.load(f"asun17904/anli-{options.model}-reg")
-card.text += f"\nTest Accuracy: {test_results.metrics['accuracy']}"
+print(test_results)
+card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}-reg")
+card.text += f"\n**Test Accuracy: {test_results.metrics['test_accuracy']:.3f}**"
+card.push_to_hub(f"asun17904/anliR{options.round}-{options.model}-reg", token=os.environ["HUB_TOKEN"])
+
 # regularized_model = trainer.model.model
 # push this to hub too
 # regularized_model.save_pretrained(f"imdb-{options.model}-kd-regularized-base-l2")

@@ -80,9 +80,9 @@ Extended Logs:
 |eval_loss|eval_accuracy|epoch|
 |--|--|--|
 """
-        for epoch in state.log_history:
-            if "eval_loss" in epoch:
-                content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
+        for state_epoch in state.log_history:
+            if "eval_loss" in state_epoch:
+                content += f"|{state_epoch['eval_loss']:.3f}|{state_epoch['eval_accuracy']:.3f}|{state_epoch['epoch']}|\n"
         card = ModelCard(content)
         card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
 
@@ -144,7 +144,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-{model_name}-kd-regularized-l2",
+        hub_model_id=f"imdb-{model_name}-a{int(alpha)}b{int(beta)}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -185,12 +185,6 @@ parser.add_argument("-epochs", type=int, help="the number of training epochs")
 parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder")
 
 options = parser.parse_args()
-
-create_repo(
-    f"asun17904/imdb-{options.model}-reg-a{options.alpha}b{options.beta}",
-    token=os.environ["HUB_TOKEN"],
-    exist_ok=True
-)
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
 pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model)
