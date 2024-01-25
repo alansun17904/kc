@@ -11,10 +11,12 @@ from textattack.models.wrappers import HuggingFaceModelWrapper
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("split", type=str, help="train/test")
 parser.add_argument("model_name", type=str, help="hugging face model repo id")
 parser.add_argument("base_model_name", type=str, help="name of the base model")
 parser.add_argument("check_point_dir", type=str, help="directory to store check points")
 parser.add_argument("output_filename", type=str, help="name of the output file")
+parser.add_argument("-marking_style", type=str, help="marking style for adv perturbations", default="file")
 
 options = parser.parse_args()
 
@@ -31,12 +33,13 @@ if BASE_MODEL_NAME == "gpt2":
     tokenizer.pad_token = tokenizer.eos_token
 
 model = HuggingFaceModelWrapper(origin_model, tokenizer)
-dataset = HuggingFaceDataset(DATASET, None, "test", shuffle=True)
+dataset = HuggingFaceDataset(DATASET, None, options.split, shuffle=True)
 
 attack_args = AttackArgs(
     num_examples=5000,
     # checkpoint_interval=1000,
     checkpoint_dir=CHECKPOINT_DIR,
+    csv_coloring_style=options.marking_style,
     log_to_csv=f"{options.output_filename}.csv",
     query_budget=300,
     parallel=True,

@@ -111,7 +111,6 @@ class KnowledgeRegularizedTrainer(Trainer):
         labels = inputs.get("labels")
         outputs = model(**inputs)
         hs, logits = outputs
-        labels = F.one_hot(labels, num_classes=2).float()
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
         class_loss = class_loss.reshape(-1, 1)
@@ -136,8 +135,8 @@ def prepare_trainer(
 ):
     training_args = TrainingArguments(
         output_dir="imdb-kd-regularized",
-        per_device_train_batch_size=16,
-        # gradient_accumulation_steps=4,
+        per_device_train_batch_size=8,
+        gradient_accumulation_steps=2,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
@@ -163,9 +162,6 @@ def prepare_trainer(
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "dataset", type=str, help="any dataset that is in the huggingface dataset module"
-)
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
 parser.add_argument(
     "alpha",
@@ -193,7 +189,7 @@ pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.mo
 if options.model == "gpt2":
     pretrained_model.config.pad_token_id = pretrained_model.config.eos_token_id
 
-dataset = load_dataset(options.dataset)
+dataset = load_dataset("imdb")
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
 train_dataset = prepare_dataset(train_dataset, tokenizer, is_gpt=options.model=="gpt2")
 valid_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
