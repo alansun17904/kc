@@ -219,3 +219,4 @@ dependencies:
       - soupsieve==2.5
       - tensorflow-hub==0.15.0
       - wrapt==1.16.0
+prefix: /mnt/ssd/alan/envs/knowledged
