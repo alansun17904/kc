@@ -129,7 +129,6 @@ dependencies:
   - nettle=3.7.3=hbbd107a_1
   - networkx=3.1=py38h06a4308_0
   - numexpr=2.8.4=py38hc78ab66_1
-  - numpy-base=1.23.5=py38h060ed82_1
   - oauthlib=3.2.2=py38h06a4308_0
   - openh264=2.1.1=h4ff587b_0
   - openjpeg=2.4.0=h3ad879b_0
@@ -166,6 +165,7 @@ dependencies:
   - responses=0.13.3=pyhd3eb1b0_0
   - rsa=4.7.2=pyhd3eb1b0_1
   - safetensors=0.3.2=py38hb02cf49_0
+  - scikit-learn=1.3.0=py38h1128e8f_1
   - scipy=1.10.1=py38hf6e8229_1
   - setuptools=68.2.2=py38h06a4308_0
   - six=1.16.0=pyhd3eb1b0_1
@@ -180,6 +180,7 @@ dependencies:
   - tensorflow-base=2.12.0=mkl_py38he5f8e37_0
   - tensorflow-estimator=2.12.0=py38h06a4308_0
   - termcolor=2.1.0=py38h06a4308_0
+  - threadpoolctl=2.2.0=pyh0d69192_0
   - tk=8.6.12=h1ccaba5_0
   - tokenizers=0.13.2=py38he7d60b5_1
   - torchaudio=2.1.2=py38_cu118
@@ -201,22 +202,22 @@ dependencies:
   - zlib=1.2.13=h5eee18b_0
   - zstd=1.5.5=hc292b87_0
   - pip:
+      - accelerate==0.26.1
       - beautifulsoup4==4.12.3
-      - blessed==1.20.0
       - contourpy==1.1.1
       - cycler==0.12.1
+      - evaluate==0.4.1
       - fonttools==4.47.2
-      - gpustat==1.1.1
       - importlib-resources==6.1.1
       - joblib==1.3.2
       - kiwisolver==1.4.5
       - matplotlib==3.7.4
       - more-itertools==10.2.0
-      - numpy==1.20.3
-      - nvidia-ml-py==12.535.133
+      - numpy==1.23.0
       - protobuf==4.25.2
       - pyparsing==3.1.1
       - soupsieve==2.5
       - tensorflow-hub==0.15.0
+      - wcwidth==0.2.13
       - wrapt==1.16.0
-prefix: /mnt/ssd/alan/envs/knowledged
+prefix: /home/alan/miniconda3/envs/knowledged
