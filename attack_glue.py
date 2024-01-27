@@ -20,7 +20,7 @@ options = parser.parse_args()
 
 DATASET = options.dataset
 TASK = options.task
-MODEL_NAME = options.model_name 
+MODEL_NAME = options.model_name
 BASE_MODEL_NAME = options.base_model_name
 CHECKPOINT_DIR = options.check_point_dir
 RECIPE = recipes.PWWSRen2019
@@ -45,11 +45,7 @@ attack_args = AttackArgs(
     # num_workers_per_device=4
 )
 
-attacker = Attacker(
-    RECIPE.build(model),
-    dataset,
-    attack_args
-)
+attacker = Attacker(RECIPE.build(model), dataset, attack_args)
 
 # print(attacker.goal_function)
 # attacker.attack.constraints[2].skip_text_shorter_than_window = False

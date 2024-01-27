@@ -16,12 +16,17 @@ parser.add_argument("model_name", type=str, help="hugging face model repo id")
 parser.add_argument("base_model_name", type=str, help="name of the base model")
 parser.add_argument("check_point_dir", type=str, help="directory to store check points")
 parser.add_argument("output_filename", type=str, help="name of the output file")
-parser.add_argument("-marking_style", type=str, help="marking style for adv perturbations", default="file")
+parser.add_argument(
+    "-marking_style",
+    type=str,
+    help="marking style for adv perturbations",
+    default="file",
+)
 
 options = parser.parse_args()
 
-DATASET = "imdb" 
-MODEL_NAME = options.model_name 
+DATASET = "imdb"
+MODEL_NAME = options.model_name
 BASE_MODEL_NAME = options.base_model_name
 CHECKPOINT_DIR = options.check_point_dir
 RECIPE = recipes.TextFoolerJin2019
