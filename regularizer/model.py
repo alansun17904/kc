@@ -9,7 +9,9 @@ class KnowledgeContinuousModel(nn.Module):
     regularizer from our paper.
     """
 
-    def __init__(self, model, alpha, beta, is_encoder_decoder=False, determinisitic=False):
+    def __init__(
+        self, model, alpha, beta, is_encoder_decoder=False, determinisitic=False
+    ):
         """Initialization for a regularized neural network
         :param model: the language model to be wrapped
         :param alpha: hyperparameter for the beta distribution
@@ -22,15 +24,27 @@ class KnowledgeContinuousModel(nn.Module):
         self.beta = beta
         self.determinisitic = determinisitic
         self.is_encoder_decoder = is_encoder_decoder
+        if self.is_encoder_decoder:
+            print("! Initialized an encoder-decoder model. !")
 
     def toggle_inference(self):
         self.inference = not self.inference
 
-    def forward(self, input_ids, labels, inputs_embeds=None, attention_mask=None, determinisitc_idx=None):
+    def forward(
+        self,
+        input_ids,
+        labels,
+        inputs_embeds=None,
+        attention_mask=None,
+        determinisitc_idx=None,
+    ):
         x = self.model(
-            input_ids=None if inputs_embeds is not None else input_ids,
+            input_ids=None
+            if inputs_embeds is not None and not self.is_encoder_decoder
+            else input_ids,
             labels=labels,
-            inputs_embeds=inputs_embeds,
+            inputs_embeds=inputs_embeds if not self.is_encoder_decoder else None,
+            decoder_inputs_embeds=inputs_embeds if self.is_encoder_decoder else None,
             attention_mask=attention_mask,
             output_hidden_states=(not self.inference),
         )
@@ -40,7 +54,7 @@ class KnowledgeContinuousModel(nn.Module):
         # the hidden activations from that hidden layer
         if determinisitc_idx is not None:
             if self.is_encoder_decoder:
-                return x.encoder_hidden_states[0], x.logits
+                return x.decoder_hidden_states[0], x.logits
             return x.hidden_states[0], x.logits
         elif self.determinisitic:
             return None, x.logits

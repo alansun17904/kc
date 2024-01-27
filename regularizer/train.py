@@ -22,6 +22,7 @@ metric = evaluate.load("accuracy")
 def prepare_dataset(dataset, tokenizer, is_gpt=False):
     if is_gpt:
         tokenizer.pad_token = tokenizer.eos_token
+
     def tokenize(batch):
         return tokenizer(batch["text"], padding=True, truncation=True)
 
@@ -84,7 +85,9 @@ Extended Logs:
             if "eval_loss" in state_epoch:
                 content += f"|{state_epoch['eval_loss']:.3f}|{state_epoch['eval_accuracy']:.3f}|{state_epoch['epoch']}|\n"
         card = ModelCard(content)
-        card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
+        card.push_to_hub(
+            f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"]
+        )
 
 
 class KnowledgeRegularizedTrainer(Trainer):
@@ -191,8 +194,12 @@ if options.model == "gpt2":
 
 dataset = load_dataset("imdb")
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
-train_dataset = prepare_dataset(train_dataset, tokenizer, is_gpt=options.model=="gpt2")
-valid_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
+train_dataset = prepare_dataset(
+    train_dataset, tokenizer, is_gpt=options.model == "gpt2"
+)
+valid_dataset = prepare_dataset(
+    valid_dataset, tokenizer, is_gpt=options.model == "gpt2"
+)
 trainer = prepare_trainer(
     options.model,
     KnowledgeContinuousModel(

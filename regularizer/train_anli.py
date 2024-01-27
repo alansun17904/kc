@@ -22,8 +22,12 @@ metric = evaluate.load("accuracy")
 def prepare_dataset(dataset, tokenizer, is_gpt=False):
     if is_gpt:
         tokenizer.pad_token = tokenizer.eos_token
+
     def tokenize(batch):
-        return tokenizer(batch["premise"], batch["hypothesis"], padding="max_length", truncation=True)
+        return tokenizer(
+            batch["premise"], batch["hypothesis"], padding="max_length", truncation=True
+        )
+
     tokenized_dataset = dataset.map(tokenize, batched=True)
     return tokenized_dataset
 
@@ -38,7 +42,7 @@ def split_dataset(dataset, round):
     return (
         dataset[f"train_r{round}"],
         dataset[f"dev_r{round}"],
-        dataset[f"test_r{round}"]
+        dataset[f"test_r{round}"],
     )
 
 
@@ -82,7 +86,9 @@ Extended Logs:
             if "eval_loss" in epoch:
                 content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
         card = ModelCard(content)
-        card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
+        card.push_to_hub(
+            f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"]
+        )
 
 
 class KnowledgeRegularizedTrainer(Trainer):
@@ -185,12 +191,16 @@ parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
-parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder", default=False)
+parser.add_argument(
+    "-is_ed", type=bool, help="if the model is an encoder-decoder", default=False
+)
 
 options = parser.parse_args()
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
-pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model, num_labels=3)
+pretrained_model = AutoModelForSequenceClassification.from_pretrained(
+    options.model, num_labels=3
+)
 
 # set the padding token if the model is gpt
 if options.model == "gpt2":
@@ -198,9 +208,13 @@ if options.model == "gpt2":
 
 dataset = load_dataset("anli")
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset, options.round)
-train_dataset = prepare_dataset(train_dataset, tokenizer, is_gpt=options.model=="gpt2")
-valid_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
-test_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
+train_dataset = prepare_dataset(
+    train_dataset, tokenizer, is_gpt=options.model == "gpt2"
+)
+valid_dataset = prepare_dataset(
+    valid_dataset, tokenizer, is_gpt=options.model == "gpt2"
+)
+test_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model == "gpt2")
 
 # train_dataset = train_dataset.select(range(20))
 # valid_dataset = valid_dataset.select(range(20))
@@ -231,7 +245,9 @@ trainer.train()
 test_results = trainer.predict(test_dataset)
 card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}")
 card.text += f"\n**Test Accuracy: {test_results.metrics['test_accuracy']:.3f}**"
-card.push_to_hub(f"asun17904/anliR{options.round}-{options.model}-reg", token=os.environ["HUB_TOKEN"])
+card.push_to_hub(
+    f"asun17904/anliR{options.round}-{options.model}-reg", token=os.environ["HUB_TOKEN"]
+)
 
 # regularized_model = trainer.model.model
 # push this to hub too

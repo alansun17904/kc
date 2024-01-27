@@ -23,20 +23,50 @@ def prepare_dataset(dataset, tokenizer, task, is_gpt=False):
     if is_gpt:
         tokenizer.pad_token = tokenizer.eos_token
     if task == "mnli":
+
         def tokenize(batch):
-            return tokenizer(batch["premise"], batch["hypothesis"], padding="max_length", truncation=True)
+            return tokenizer(
+                batch["premise"],
+                batch["hypothesis"],
+                padding="max_length",
+                truncation=True,
+            )
+
     elif task == "cola":
+
         def tokenize(batch):
             return tokenizer(batch["sentence"], padding="max_length", truncation=True)
+
     elif task == "mrpc" or task == "wnli" or task == "rte":
+
         def tokenize(batch):
-            return tokenizer(batch["sentence1"], batch["sentence2"], padding="max_length", truncation=True)
+            return tokenizer(
+                batch["sentence1"],
+                batch["sentence2"],
+                padding="max_length",
+                truncation=True,
+            )
+
     elif task == "qqp":
+
         def tokenize(batch):
-            return tokenizer(batch["question1"], batch["question2"], padding="max_length", truncation=True)
+            return tokenizer(
+                batch["question1"],
+                batch["question2"],
+                padding="max_length",
+                truncation=True,
+            )
+
     elif task == "qnli":
+
         def tokenize(batch):
-            return tokenizer(batch["question"], batch["sentence"], padding="max_length", truncation=True)
+            return tokenizer(
+                batch["question"],
+                batch["sentence"],
+                padding="max_length",
+                truncation=True,
+            )
+
     tokenized_dataset = dataset.map(tokenize, batched=True)
     return tokenized_dataset
 
@@ -52,7 +82,7 @@ def split_dataset(dataset, task):
         return (
             dataset["train"],
             dataset["validation_matched"],
-            dataset["test_matched"]
+            dataset["test_matched"],
         )
     else:
         return dataset["train"], dataset["validation"], dataset["test"]
@@ -97,7 +127,9 @@ Extended Logs:
             if "eval_loss" in epoch:
                 content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
         card = ModelCard(content)
-        card.push_to_hub(f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"])
+        card.push_to_hub(
+            f"asun17904/{args.hub_model_id}", token=os.environ["HUB_TOKEN"]
+        )
 
 
 class KnowledgeRegularizedTrainer(Trainer):
@@ -193,15 +225,20 @@ parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
-parser.add_argument("-encoder_decoder", type=bool, help="if the model is an encoder-decoder", default=False)
+parser.add_argument(
+    "-encoder_decoder",
+    type=bool,
+    help="if the model is an encoder-decoder",
+    default=False,
+)
 
 options = parser.parse_args()
 
-#create_repo(
+# create_repo(
 #    f"asun17904/glue-{options.task}-{options.model}-kd-regularized-l2",
 #    token=os.environ["HUB_TOKEN"],
 #    exist_ok=True
-#)
+# )
 
 # based on the task, determine the number of labels
 if options.task == "mnli":
@@ -210,7 +247,9 @@ else:
     num_labels = 2
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
-pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model, num_labels=num_labels)
+pretrained_model = AutoModelForSequenceClassification.from_pretrained(
+    options.model, num_labels=num_labels
+)
 
 # set the padding token if the model is gpt
 if options.model == "gpt2":
@@ -220,11 +259,15 @@ print("Is Encoder-Decoder Model:", options.encoder_decoder)
 
 dataset = load_dataset("glue", options.task)
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset, options.task)
-train_dataset = prepare_dataset(train_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
-valid_dataset = prepare_dataset(valid_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
+train_dataset = prepare_dataset(
+    train_dataset, tokenizer, options.task, is_gpt=options.model == "gpt2"
+)
+valid_dataset = prepare_dataset(
+    valid_dataset, tokenizer, options.task, is_gpt=options.model == "gpt2"
+)
 
 # train_dataset = train_dataset.select(range(4))
-#valid_dataset = valid_dataset.select(range(4))
+# valid_dataset = valid_dataset.select(range(4))
 
 trainer = prepare_trainer(
     options.task,
