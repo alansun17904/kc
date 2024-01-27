@@ -108,7 +108,7 @@ class KnowledgeRegularizedTrainer(Trainer):
 
 
 def prepare_trainer(
-    model_name,
+    base_model_name,
     model,
     train_dataset,
     valid_dataset,
@@ -126,7 +126,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-{model_name}-adviter",
+        hub_model_id=f"{base_model_name}-adviter",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -144,6 +144,7 @@ def prepare_trainer(
 
 parser = argparse.ArgumentParser()
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
+parser.add_argument("base_model", type=str, help="name of the base model")
 parser.add_argument("learning_rate", type=float, help="learning rate")
 parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("advtrain_file", type=str, help="csv file of adversarial examples")
@@ -152,11 +153,12 @@ parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decode
 
 options = parser.parse_args()
 
-tokenizer = AutoTokenizer.from_pretrained(options.model)
+tokenizer = AutoTokenizer.from_pretrained(options.base_model)
 pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model)
 
 # set the padding token if the model is gpt
-if options.model == "gpt2":
+if options.base_model == "gpt2":
+    tokenizer.pad_token = tokenizer.eos_token
     pretrained_model.config.pad_token_id = pretrained_model.config.eos_token_id
 
 dataset = load_dataset("imdb")
@@ -172,12 +174,12 @@ advtest, advlabels = advtrain_df.perturbed_text, advtrain_df.ground_truth_output
 # add these perturbed examples into the training dataset
 for i in range(len(advtest)):
     train_dataset.add_item({
-        "text": advtest[i],
-        "label": advlabels[i]
+        "text": advtest.iloc[i],
+        "label": advlabels.iloc[i]
     })
 
 trainer = prepare_trainer(
-    options.model,
+    options.base_model,
     KnowledgeContinuousModel(
         pretrained_model,
         1,
