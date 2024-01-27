@@ -143,7 +143,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-{model_name}-a{int(alpha)}b{int(beta)}",
+        hub_model_id=f"imdb-{model_name}-a{int(alpha)}b{int(beta)}l{lam}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
