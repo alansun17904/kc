@@ -9,7 +9,7 @@ class KnowledgeContinuousModel(nn.Module):
     regularizer from our paper.
     """
 
-    def __init__(self, model, alpha, beta, is_encoder_decoder=False):
+    def __init__(self, model, alpha, beta, is_encoder_decoder=False, determinisitic=False):
         """Initialization for a regularized neural network
         :param model: the language model to be wrapped
         :param alpha: hyperparameter for the beta distribution
@@ -20,12 +20,13 @@ class KnowledgeContinuousModel(nn.Module):
         self.model = model
         self.alpha = alpha
         self.beta = beta
+        self.determinisitic = determinisitic
         self.is_encoder_decoder = is_encoder_decoder
 
     def toggle_inference(self):
         self.inference = not self.inference
 
-    def forward(self, input_ids, labels, attention_mask=None):
+    def forward(self, input_ids, labels, attention_mask=None, determinisitc_idx=None):
         x = self.model(
             input_ids=input_ids,
             labels=labels,
@@ -36,6 +37,13 @@ class KnowledgeContinuousModel(nn.Module):
             return x
         # choose a random layer using the beta distribution and get
         # the hidden activations from that hidden layer
+        if determinisitc_idx:
+            if self.is_encoder_decoder:
+                return x.encoder_hidden_states[0], x.logits
+            return x.hidden_states[0], x.logits
+        elif self.determinisitic:
+            return None, x.logits
+
         if not self.is_encoder_decoder:
             layer = int(len(x.hidden_states) * np.random.beta(self.alpha, self.beta))
             return torch.mean(x.hidden_states[layer], axis=1), x.logits
