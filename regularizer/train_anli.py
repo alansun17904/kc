@@ -95,10 +95,10 @@ class KnowledgeRegularizedTrainer(Trainer):
             prediction_loss, model_output = self.compute_loss(
                 model, inputs, return_outputs=True
             )
-            _, logits = model_output
+            print(model_output)
             if prediction_loss_only:
                 return (prediction_loss, None, None)
-            return (prediction_loss, logits, labels)
+            return (prediction_loss, model_output, labels)
 
     def calc_knowledge_discontinuities(self, class_losses, hs):
         dist = torch.cdist(hs, hs) + self.stabilizer
@@ -108,14 +108,21 @@ class KnowledgeRegularizedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.get("labels")
         outputs = model(**inputs)
-        hs, logits = outputs
+        _, logits = outputs
         logits = logits.softmax(dim=1)
-        class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
-        class_loss = class_loss.reshape(-1, 1)
-        kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        class_loss = F.cross_entropy(logits, labels)  # N x 1
         if return_outputs:
-            return torch.sum(class_loss) + self.lam * kd_score, outputs
-        return torch.sum(class_loss) + self.lam * kd_score
+            return class_loss, logits 
+        return class_loss
+        # class_loss = class_loss.reshape(-1, 1)
+        # if self.lam == 0:
+        #    if return_outputs:
+        #        return torch.sum(class_loss), outputs
+        #    return torch.sum(class_loss)
+        # kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        # if return_outputs:
+        #     return torch.sum(class_loss) + self.lam * kd_score, outputs
+        # return torch.sum(class_loss) + self.lam * kd_score
 
 
 def prepare_trainer(
@@ -133,16 +140,16 @@ def prepare_trainer(
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir=f"anliR{round_number}-{model_name}-reg",
-        per_device_train_batch_size=16,
-        # gradient_accumulation_steps=4,
+        output_dir=f"anliR{round_number}-{model_name}",
+        per_device_train_batch_size=8,
+        gradient_accumulation_steps=2,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"anliR{round_number}-{model_name}-reg",
+        hub_model_id=f"anliR{round_number}-{model_name}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -222,8 +229,7 @@ trainer = prepare_trainer(
 # trainer.evaluate()
 trainer.train()
 test_results = trainer.predict(test_dataset)
-print(test_results)
-card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}-reg")
+card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}")
 card.text += f"\n**Test Accuracy: {test_results.metrics['test_accuracy']:.3f}**"
 card.push_to_hub(f"asun17904/anliR{options.round}-{options.model}-reg", token=os.environ["HUB_TOKEN"])
 
