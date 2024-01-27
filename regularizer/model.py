@@ -26,10 +26,11 @@ class KnowledgeContinuousModel(nn.Module):
     def toggle_inference(self):
         self.inference = not self.inference
 
-    def forward(self, input_ids, labels, attention_mask=None, determinisitc_idx=None):
+    def forward(self, input_ids, labels, inputs_embeds=None, attention_mask=None, determinisitc_idx=None):
         x = self.model(
-            input_ids=input_ids,
+            input_ids=None if inputs_embeds is not None else input_ids,
             labels=labels,
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             output_hidden_states=(not self.inference),
         )
@@ -37,7 +38,7 @@ class KnowledgeContinuousModel(nn.Module):
             return x
         # choose a random layer using the beta distribution and get
         # the hidden activations from that hidden layer
-        if determinisitc_idx:
+        if determinisitc_idx is not None:
             if self.is_encoder_decoder:
                 return x.encoder_hidden_states[0], x.logits
             return x.hidden_states[0], x.logits

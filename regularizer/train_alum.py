@@ -16,6 +16,10 @@ from transformers import (
 )
 
 
+import transformers
+
+transformers.logging.set_verbosity_warning()
+
 metric = evaluate.load("accuracy")
 
 
@@ -48,12 +52,6 @@ def split_dataset(dataset):
 # are doing this.
 # TODO: also need to specify a lambda value on the regularizer term
 class LoggingCallback(TrainerCallback):
-    def __init__(self, alpha, beta, lam, normalizer):
-        self.alpha = alpha
-        self.beta = beta
-        self.lam = lam
-        self.normalizer = normalizer
-
     def on_epoch_end(self, args, state, control, **kwargs):
         content = f"""
 ---
@@ -62,21 +60,6 @@ license: mit
 library_name: pytorch
 ---
 # ALUM Training Baseline
-Trainer Hyperparameters:
-- `lr` = {args.learning_rate}
-- `per_device_batch_size` = {args.per_device_train_batch_size}
-- `gradient_accumulation_steps` = {args.gradient_accumulation_steps}
-- `weight_decay` = {args.weight_decay}
-- `seed` = {args.seed}
-
-Regularization Hyperparameters
-- `numerical stability denominator constant` = {self.normalizer}
-- `lambda` = {self.lam}
-- `alpha` = {self.alpha}
-- `beta` = {self.beta}
-
-Extended Logs:
-
 |eval_loss|eval_accuracy|epoch|
 |--|--|--|
 """
@@ -110,29 +93,35 @@ class KnowledgeRegularizedTrainer(Trainer):
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         with torch.no_grad():
             labels = inputs.get("labels", None)
-            prediction_loss, model_output = self.compute_loss(
-                model, inputs, return_outputs=True
+            prediction_loss, logits = self.compute_loss(
+                model, inputs, return_outputs=True, evaluation_c=True,
             )
-            _, logits = model_output
             if prediction_loss_only:
                 return (prediction_loss, None, None)
             return (prediction_loss, logits, labels)
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, evaluation_c=False):
         labels = inputs.get("labels")
         outputs = model(**inputs, determinisitc_idx=0)  # get the first embeddings and output
         hs, logits = outputs  
         class_loss = F.cross_entropy(logits.softmax(dim=1), labels)
+        if evaluation_c:
+            if return_outputs:
+                return class_loss, logits
+            return class_loss
         # find the optimal adversarial direction within the sub-word embedding space
         # move in a random direction first
         noise = torch.normal(torch.zeros(hs.shape), torch.ones(hs.shape)) * 1e-5
         noise.requires_grad_()
+        noise = noise.to(hs.device)
         new_embedding = hs.detach() + noise
+
+        # remove input_ids from the inputs dictionary
         _, adv_logits = model(**inputs, inputs_embeds=new_embedding)
         # compare the KL between the new logits and the old ones
         adv_loss = KnowledgeRegularizedTrainer.KL(adv_logits, logits.detach(), reduction="batchmean")
         # find the gradient with respect to the random perturbation
-        delta_grad = torch.autograd.grad(adv_loss, noise, only_inputs=True)
+        delta_grad, = torch.autograd.grad(adv_loss, noise, only_inputs=True)
         delta_norm = delta_grad.norm()
         # normalize the gradient, then move in that direction
         # skip this if the norm of the gradient is too large
@@ -148,7 +137,7 @@ class KnowledgeRegularizedTrainer(Trainer):
         # find the symmetric KL loss
         adv_loss_f = KnowledgeRegularizedTrainer.KL(adv_logits, logits.detach())
         adv_loss_b = KnowledgeRegularizedTrainer.KL(logits, adv_logits.detach())
-        adv_loss = 10 * (adv_loss_f + adv_loss_b)
+        adv_loss = 1e-3 * (adv_loss_f + adv_loss_b)
         
         if return_outputs:
             return class_loss + adv_loss, logits
@@ -160,25 +149,19 @@ def prepare_trainer(
     model,
     train_dataset,
     valid_dataset,
-    alpha,
-    beta,
-    lam,
-    stabilizer,
     learning_rate,
-    weight_decay,
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir="imdb-kd-regularized",
-        per_device_train_batch_size=16,
-        # gradient_accumulation_steps=4,
+        output_dir="alum-imdb-kd-regularized",
+        per_device_train_batch_size=32,
+        # gradient_accumulation_steps=2,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
         # eval_accumulation_steps=4,
-        weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"imdb-{model_name}-kd-regularized-l2",
+        hub_model_id=f"alum-imdb-{model_name}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -189,42 +172,18 @@ def prepare_trainer(
         train_dataset=train_dataset,
         eval_dataset=valid_dataset,
         compute_metrics=compute_metrics,
-        callbacks=[LoggingCallback(alpha, beta, lam, stabilizer)],
+        callbacks=[LoggingCallback()],
     )
-    trainer.lam = lam
-    trainer.stabilizer = stabilizer
     return trainer
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "dataset", type=str, help="any dataset that is in the huggingface dataset module"
-)
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
-parser.add_argument(
-    "alpha",
-    type=float,
-    help="parameter in the beta distribution for choosing hidden layer",
-)
-parser.add_argument(
-    "beta",
-    type=float,
-    help="parameter in the beta distribution for choosing the hidden layer",
-)
-parser.add_argument("lam", type=float, help="weight given to the regularization term")
-parser.add_argument("stabilizer", type=float, help="stabilizer term")
 parser.add_argument("learning_rate", type=float, help="learning rate")
-parser.add_argument("weight_decay", type=float, help="weight decay")
 parser.add_argument("-epochs", type=int, help="the number of training epochs")
 parser.add_argument("-is_ed", type=bool, help="if the model is an encoder-decoder")
 
 options = parser.parse_args()
-
-create_repo(
-    f"asun17904/imdb-{options.model}-kd-regularized-l2",
-    token=os.environ["HUB_TOKEN"],
-    exist_ok=True
-)
 
 tokenizer = AutoTokenizer.from_pretrained(options.model)
 pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.model)
@@ -233,27 +192,23 @@ pretrained_model = AutoModelForSequenceClassification.from_pretrained(options.mo
 if options.model == "gpt2":
     pretrained_model.config.pad_token_id = pretrained_model.config.eos_token_id
 
-dataset = load_dataset(options.dataset)
+dataset = load_dataset("imdb")
 train_dataset, valid_dataset, test_dataset = split_dataset(dataset)
 train_dataset = prepare_dataset(train_dataset, tokenizer, is_gpt=options.model=="gpt2")
 valid_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model=="gpt2")
+
 trainer = prepare_trainer(
     options.model,
     KnowledgeContinuousModel(
         pretrained_model,
-        options.alpha,
-        options.beta,
+        1,
+        1,
         options.is_ed,
         True,
     ),
     train_dataset,
     valid_dataset,
-    options.alpha,
-    options.beta,
-    options.lam,
-    options.stabilizer,
     options.learning_rate,
-    options.weight_decay,
     epochs=options.epochs,
 )
 # trainer.evaluate()
