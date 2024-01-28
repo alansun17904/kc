@@ -252,7 +252,7 @@ def prepare_trainer(
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir=f"anliR{round_number}-{model_name}",
+        output_dir=f"anliR{round_number}-{model_name}-{trainer_name}",
         per_device_train_batch_size=8,
         gradient_accumulation_steps=2,
         learning_rate=learning_rate,
@@ -261,7 +261,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"anliR{round_number}-{model_name}",
+        hub_model_id=f"anliR{round_number}-{model_name}-{trainer_name}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
@@ -357,10 +357,10 @@ trainer = prepare_trainer(
 # trainer.evaluate()
 trainer.train()
 test_results = trainer.predict(test_dataset)
-card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}")
+card = ModelCard.load(f"asun17904/anliR{options.round}-{options.model}-{options.trainer_name}")
 card.text += f"\n**Test Accuracy: {test_results.metrics['test_accuracy']:.3f}**"
 card.push_to_hub(
-    f"asun17904/anliR{options.round}-{options.model}-reg", token=os.environ["HUB_TOKEN"]
+    f"asun17904/anliR{options.round}-{options.model}-{options.trainer_name}", token=os.environ["HUB_TOKEN"]
 )
 
 # regularized_model = trainer.model.model

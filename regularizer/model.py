@@ -44,7 +44,7 @@ class KnowledgeContinuousModel(nn.Module):
             else input_ids,
             labels=labels,
             inputs_embeds=inputs_embeds if not self.is_encoder_decoder else None,
-            decoder_inputs_embeds=inputs_embeds if self.is_encoder_decoder else None,
+            # decoder_inputs_embeds=inputs_embeds if self.is_encoder_decoder else None,
             attention_mask=attention_mask,
             output_hidden_states=(not self.inference),
         )
