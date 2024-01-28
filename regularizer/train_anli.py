@@ -286,6 +286,7 @@ def prepare_trainer(
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("trainer_name", choices=["alum", "kd", "plain"], help="which form of regularization to use")
 parser.add_argument("round", type=int, help="round of anli task")
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
 parser.add_argument(
@@ -335,6 +336,7 @@ test_dataset = prepare_dataset(valid_dataset, tokenizer, is_gpt=options.model ==
 
 trainer = prepare_trainer(
     options.round,
+    options.trainer_name,
     options.model,
     KnowledgeContinuousModel(
         pretrained_model,
