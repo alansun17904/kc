@@ -166,7 +166,94 @@ class KnowledgeRegularizedTrainer(Trainer):
         return torch.sum(class_loss)#  + self.lam * kd_score
 
 
+class ALUMTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def adv_project(self, grad, norm_type="inf", eps=1e-6):
+        if norm_type == "l2":
+            direction = grad / (torch.norm(grad, dim=-1, keepdim=True) + eps)
+        elif norm_type == "l1":
+            direction = grad.sign()
+        else:
+            direction = grad / (grad.abs().max(-1, keepdim=True)[0] + eps)
+        return direction
+
+    @staticmethod
+    def KL(input, target, reduction="sum"):
+        input = input.float()
+        target = target.float()
+        loss = F.kl_div(
+            F.log_softmax(input, dim=-1, dtype=torch.float32),
+            F.softmax(target, dim=-1, dtype=torch.float32),
+            reduction=reduction,
+        )
+        return loss
+
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        with torch.no_grad():
+            labels = inputs.get("labels", None)
+            prediction_loss, logits = self.compute_loss(
+                model,
+                inputs,
+                return_outputs=True,
+                evaluation_c=True,
+            )
+            if prediction_loss_only:
+                return (prediction_loss, None, None)
+            return (prediction_loss, logits, labels)
+
+    def compute_loss(self, model, inputs, return_outputs=False, evaluation_c=False):
+        labels = inputs.get("labels")
+        outputs = model(
+            **inputs, determinisitc_idx=0
+        )  # get the first embeddings and output
+        hs, logits = outputs
+        class_loss = F.cross_entropy(logits.softmax(dim=1), labels)
+        if evaluation_c:
+            if return_outputs:
+                return class_loss, logits
+            return class_loss
+        # find the optimal adversarial direction within the sub-word embedding space
+        # move in a random direction first
+        noise = torch.normal(torch.zeros(hs.shape), torch.ones(hs.shape)) * 1e-5
+        noise.requires_grad_()
+        noise = noise.to(hs.device)
+        new_embedding = hs.detach() + noise
+
+        # remove input_ids from the inputs dictionary
+        _, adv_logits = model(**inputs, inputs_embeds=new_embedding)
+        # compare the KL between the new logits and the old ones
+        adv_loss = ALUMTrainer.KL(
+            adv_logits, logits.detach(), reduction="batchmean"
+        )
+        # find the gradient with respect to the random perturbation
+        (delta_grad,) = torch.autograd.grad(adv_loss, noise, only_inputs=True)
+        delta_norm = delta_grad.norm()
+        # normalize the gradient, then move in that direction
+        # skip this if the norm of the gradient is too large
+        if torch.isnan(delta_norm) or torch.isinf(delta_norm):
+            if return_outputs:
+                return class_loss, logits
+            return class_loss
+        noise = noise + delta_grad * 1e-3
+        # perform the projection again and find the loss
+        noise = self.adv_project(noise, eps=1e-5)
+        new_embedding = hs.detach() + noise
+        _, adv_logits = model(**inputs, inputs_embeds=new_embedding)
+        # find the symmetric KL loss
+        adv_loss_f = ALUMTrainer.KL(adv_logits, logits.detach())
+        adv_loss_b = ALUMTrainer.KL(logits, adv_logits.detach())
+        adv_loss = 1e-3 * (adv_loss_f + adv_loss_b)
+
+        if return_outputs:
+            return class_loss + adv_loss, logits
+        return class_loss + adv_loss
+    
+
+
 def prepare_trainer(
+    trainer_name,
     task,
     model_name,
     model,
@@ -180,6 +267,10 @@ def prepare_trainer(
     weight_decay,
     epochs=20,
 ):
+    if trainer_name == "alum":
+        trainer_cls = ALUMTrainer
+    else:
+        trainer_cls = KnowledgeRegularizedTrainer
     training_args = TrainingArguments(
         output_dir=f"glue-{task}-{model_name}",
         per_device_train_batch_size=32,
@@ -195,7 +286,7 @@ def prepare_trainer(
         save_steps=2000,
         seed=42,
     )
-    trainer = KnowledgeRegularizedTrainer(
+    trainer = trainer_cls(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
