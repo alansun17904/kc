@@ -102,7 +102,7 @@ language: en
 license: mit
 library_name: pytorch
 ---
-# Knowledge Continuity Regularized Network
+# Plainly Optimized Network
 Dataset: GLUE
 
 Trainer Hyperparameters:
@@ -112,17 +112,18 @@ Trainer Hyperparameters:
 - `weight_decay` = {args.weight_decay}
 - `seed` = {args.seed}
 
-Regularization Hyperparameters
-- `numerical stability denominator constant` = {self.normalizer}
-- `lambda` = {self.lam}
-- `alpha` = {self.alpha}
-- `beta` = {self.beta}
-
-Extended Logs:
-
 |eval_loss|eval_accuracy|epoch|
 |--|--|--|
 """
+#Regularization Hyperparameters
+#- `numerical stability denominator constant` = {self.normalizer}
+#- `lambda` = {self.lam}
+#- `alpha` = {self.alpha}
+#- `beta` = {self.beta}
+
+#Extended Logs:
+
+
         for epoch in state.log_history:
             if "eval_loss" in epoch:
                 content += f"|{epoch['eval_loss']:.3f}|{epoch['eval_accuracy']:.3f}|{epoch['epoch']}|\n"
@@ -148,7 +149,7 @@ class KnowledgeRegularizedTrainer(Trainer):
             return (prediction_loss, logits, labels)
 
     def calc_knowledge_discontinuities(self, class_losses, hs):
-        dist = torch.cdist(hs, hs) + self.stabilizer
+        dist = torch.cdist(hs, hs, p=torch.inf) + self.stabilizer
         loss_dist = torch.cdist(class_losses, class_losses, p=1)
         return torch.sum(loss_dist / dist)
 
@@ -159,10 +160,10 @@ class KnowledgeRegularizedTrainer(Trainer):
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
         class_loss = class_loss.reshape(-1, 1)
-        kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        # kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
         if return_outputs:
-            return torch.sum(class_loss) + self.lam * kd_score, outputs
-        return torch.sum(class_loss) + self.lam * kd_score
+            return torch.sum(class_loss), outputs #  + self.lam * kd_score, outputs
+        return torch.sum(class_loss)#  + self.lam * kd_score
 
 
 def prepare_trainer(
@@ -180,8 +181,8 @@ def prepare_trainer(
     epochs=20,
 ):
     training_args = TrainingArguments(
-        output_dir=f"glue-{task}-{model_name}-kd",
-        per_device_train_batch_size=16,
+        output_dir=f"glue-{task}-{model_name}",
+        per_device_train_batch_size=32,
         # gradient_accumulation_steps=4,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
@@ -189,7 +190,7 @@ def prepare_trainer(
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"glue-{task}-{model_name}-regularized-l2",
+        hub_model_id=f"glue-{task}-{model_name}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
