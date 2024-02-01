@@ -272,16 +272,16 @@ def prepare_trainer(
     else:
         trainer_cls = KnowledgeRegularizedTrainer
     training_args = TrainingArguments(
-        output_dir=f"glue-{task}-{model_name}",
-        per_device_train_batch_size=16,
-        # gradient_accumulation_steps=4,
+        output_dir=f"glue-{task}-{model_name}-{trainer_name}",
+        per_device_train_batch_size=8,
+        gradient_accumulation_steps=2,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
         # eval_accumulation_steps=4,
         weight_decay=weight_decay,
         hub_token=os.environ.get("HUB_TOKEN"),
-        hub_model_id=f"glue-{task}-{model_name}",
+        hub_model_id=f"glue-{task}-{model_name}-{trainer_name}",
         push_to_hub=True,
         save_steps=2000,
         seed=42,
