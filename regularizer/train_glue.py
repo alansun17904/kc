@@ -273,7 +273,7 @@ def prepare_trainer(
         trainer_cls = KnowledgeRegularizedTrainer
     training_args = TrainingArguments(
         output_dir=f"glue-{task}-{model_name}",
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=16,
         # gradient_accumulation_steps=4,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
@@ -300,6 +300,7 @@ def prepare_trainer(
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("trainer", type=str, help="name of the trainer")
 parser.add_argument("task", type=str, help="name of the glue task being run")
 parser.add_argument("model", type=str, help="name of the model (huggingface repo)")
 parser.add_argument(
@@ -362,6 +363,7 @@ valid_dataset = prepare_dataset(
 # valid_dataset = valid_dataset.select(range(4))
 
 trainer = prepare_trainer(
+    options.trainer,
     options.task,
     options.model,
     KnowledgeContinuousModel(
