@@ -1,3 +1,4 @@
+import numpy as np
 import tqdm
 import json
 import torch
@@ -91,7 +92,7 @@ adv_dataset = prepare_dataset(adv_dataset, tokenizer, options.task, is_gpt=optio
 train_args = TrainingArguments(
     "inference",
     per_device_train_batch_size=8,
-    per_device_eval_batch_size=4,
+    per_device_eval_batch_size=64,
 )
 trainer = Trainer(
     model=pretrained_model,
@@ -102,11 +103,12 @@ trainer = Trainer(
 )
 
 predictions = trainer.predict(adv_dataset)
+predictions = np.argmax(predictions.predictions,axis=1)
 print(
     "accuracy under attack",
     metric.compute(
         predictions=predictions, 
-        references=[v["label"] for v in test_dataset]
+        references=[v["label"] for v in adv_dataset]
     )
 )
 
