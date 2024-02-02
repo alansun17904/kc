@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from datasets import Dataset
 from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
+from transformers import Trainer, TrainingArguments
 
 metric = evaluate.load("accuracy")
 
@@ -77,49 +77,36 @@ else:
 
 tokenizer = AutoTokenizer.from_pretrained(options.base_model_name)
 pretrained_model = AutoModelForSequenceClassification.from_pretrained(
-    options.model, num_label=num_labels
+    options.model_name, num_labels=num_labels
 )
 
 # first we run inference on the entire test set without any perturbations and check the accuracy
 dataset = load_dataset("glue", options.task)
 # get the test dataset
-test_dataset = dataset["test"]
-test_dataset = prepare_dataset(test_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
-# run inference on test set and report the raw accuracy
-dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-pretrained_model.eval()
-all_predictions = []
-all_labels = []
-with torch.no_grad():
-    for batch in tqdm.tqdm(test_dataset):
-        input_ids = batch["input_ids"]
-        labels = batch["labels"]
-
-        output = pretrained_model(input_ids)
-        logits = output.logits
-        predictions = torch.argmax(logits, dim=1)
-        all_labels.extend(labels)
-        all_predictions.extend(predictions)
-print("accuracy no attack", metric.compute(predictions=all_predictions, references=all_labels))
-
 # now run infernece on adversarial glue
-datapoints = json.load(open("test_ann.json"))[options.task]
+datapoints = json.load(open("regularizer/test_ann.json"))[options.task]
 # create a new dataset object from this 
 adv_dataset = Dataset.from_list(datapoints)
-adv_dataset = prepare_dataset(adv_dataset, tokenizer, options.task, is_gpt=options.model=="gpt2")
-dataloader = DataLoader(adv_dataset, batch_size=4, shuffle=False)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-pretrained_model.eval()
-all_adv_predictions = []
-all_adv_labels = []
-with torch.no_grad():
-    for batch in tqdm.tqdm(test_dataset):
-        input_ids = batch["input_ids"]
-        labels = batch["labels"]
-        output = pretrained_model(input_ids)
-        logits = output.logits
-        predictions = torch.argmax(logits, dim=1)
-        all_adv_labels.extend(labels)
-        all_adv_predictions.extend(predictions)
-print("accuracy under attack", metric.compute(predictions=all_adv_predictions, references=all_adv_labels))
+adv_dataset = prepare_dataset(adv_dataset, tokenizer, options.task, is_gpt=options.base_model_name=="gpt2")
+train_args = TrainingArguments(
+    "inference",
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=4,
+)
+trainer = Trainer(
+    model=pretrained_model,
+    args=train_args,
+    train_dataset=adv_dataset,
+    eval_dataset=adv_dataset,
+    tokenizer=tokenizer
+)
+
+predictions = trainer.predict(adv_dataset)
+print(
+    "accuracy under attack",
+    metric.compute(
+        predictions=predictions, 
+        references=[v["label"] for v in test_dataset]
+    )
+)
+
