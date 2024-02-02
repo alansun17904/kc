@@ -1,6 +1,7 @@
 import os
 import torch
 import evaluate
+import torch
 import torch.nn.functional as F
 import numpy as np
 import argparse
@@ -218,7 +219,7 @@ class KnowledgeRegularizedTrainer(Trainer):
             return (prediction_loss, logits, labels)
 
     def calc_knowledge_discontinuities(self, class_losses, hs):
-        dist = torch.cdist(hs, hs) + self.stabilizer
+        dist = torch.cdist(hs, hs, p=torch.inf) + self.stabilizer
         loss_dist = torch.cdist(class_losses, class_losses, p=1)
         return torch.sum(loss_dist / dist)
 
@@ -253,8 +254,8 @@ def prepare_trainer(
 ):
     training_args = TrainingArguments(
         output_dir=f"anliR{round_number}-{model_name}-{trainer_name}",
-        per_device_train_batch_size=8,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=16,
+        # gradient_accumulation_steps=2,
         learning_rate=learning_rate,
         num_train_epochs=epochs,
         evaluation_strategy="epoch",

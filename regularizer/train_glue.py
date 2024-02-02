@@ -143,7 +143,7 @@ class KnowledgeRegularizedTrainer(Trainer):
             prediction_loss, model_output = self.compute_loss(
                 model, inputs, return_outputs=True
             )
-            _, logits = model_output
+            logits = model_output
             if prediction_loss_only:
                 return (prediction_loss, None, None)
             return (prediction_loss, logits, labels)
@@ -160,10 +160,10 @@ class KnowledgeRegularizedTrainer(Trainer):
         logits = logits.softmax(dim=1)
         class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
         class_loss = class_loss.reshape(-1, 1)
-        # kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
         if return_outputs:
-            return torch.sum(class_loss), outputs #  + self.lam * kd_score, outputs
-        return torch.sum(class_loss)#  + self.lam * kd_score
+            return torch.sum(class_loss)+ self.lam * kd_score, outputs
+        return torch.sum(class_loss)+ self.lam * kd_score
 
 
 class ALUMTrainer(Trainer):
@@ -283,7 +283,6 @@ def prepare_trainer(
         hub_token=os.environ.get("HUB_TOKEN"),
         hub_model_id=f"glue-{task}-{model_name}-{trainer_name}",
         push_to_hub=True,
-        save_steps=2000,
         seed=42,
     )
     trainer = trainer_cls(
