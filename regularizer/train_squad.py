@@ -1,3 +1,6 @@
+import os
+import torch
+import torch.nn.functional as F
 from huggingface_hub import notebook_login
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
@@ -72,6 +75,42 @@ model = AutoModelForCausalLM.from_pretrained("gpt2")
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 
+
+class KnowledgeRegularizedTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        with torch.no_grad():
+            labels = inputs.get("labels", None)
+            prediction_loss, model_output = self.compute_loss(
+                model, inputs, return_outputs=True
+            )
+            _, logits = model_output
+            if prediction_loss_only:
+                return (prediction_loss, None, None)
+            return (prediction_loss, logits, labels)
+
+    def calc_knowledge_discontinuities(self, class_losses, hs):
+        dist = torch.cdist(hs, hs) + self.stabilizer
+        loss_dist = torch.cdist(class_losses, class_losses, p=1)
+        return torch.sum(loss_dist / dist)
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.get("labels")
+        outputs = model(**inputs)
+        hs, logits = outputs
+        logits = logits.softmax(dim=1)
+        class_loss = F.cross_entropy(logits, labels, reduction="none")  # N x 1
+        class_loss = class_loss.reshape(-1, 1)
+        kd_score = self.calc_knowledge_discontinuities(class_loss, hs)
+        if return_outputs:
+            return torch.sum(class_loss) + self.lam * kd_score, outputs
+        return torch.sum(class_loss) + self.lam * kd_score
+
+
+
+
 training_args = TrainingArguments(
     output_dir="imdb-kd-regularized",
     per_device_train_batch_size=8,
@@ -88,7 +127,7 @@ training_args = TrainingArguments(
     seed=42,
 )
 
-trainer = Trainer(
+trainer = KnowledgeRegularizedTrainer(
     model=model,
     args=training_args,
     train_dataset=train_dataset,
