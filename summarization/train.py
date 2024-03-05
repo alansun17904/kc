@@ -4,6 +4,7 @@ import argparse
 import torch
 import evaluate
 import numpy as np
+import torch.nn.functional as F
 from transformers import Trainer
 from transformers import GPT2LMHeadModel
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, Seq2SeqTrainer, Seq2SeqTrainingArguments
@@ -54,7 +55,6 @@ def compute_metrics(eval_pred):
 
 class SummarizationTrainer(Trainer):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         if kwargs.get("kd", False):
             self.regularization = True
             self.alpha = kwargs.get("alpha")
@@ -62,6 +62,11 @@ class SummarizationTrainer(Trainer):
             self.lam = kwargs.get("lam")
         else:
             self.regularization = False
+        del kwargs["alpha"]
+        del kwargs["beta"]
+        del kwargs["lam"]
+        del kwargs["kd"]
+        super().__init__(*args, **kwargs)
 
     def calc_knowledge_discontinuities(self, logit_loss, hs):
         dist = torch.cdist(hs, hs) + 1e-2
@@ -97,11 +102,14 @@ class SummarizationTrainer(Trainer):
             layer = int(len(outputs.hidden_states) * np.random.beta(self.alpha, self.beta))
             hs = torch.mean(outputs.hidden_states[layer], axis=1)
             del outputs.hidden_states
+        torch.cuda.empty_cache()
         logits = outputs.logits 
         # get the error on the logits
-        logit_loss = F.cross_entropy(logits, labels, reduction="none")
+        logits = torch.permute(logits, (0, 2, 1))
+        logit_loss = torch.mean(F.cross_entropy(logits, labels, reduction="none"), axis=1)
         logit_loss = logit_loss.reshape(-1, 1)
         kd_score = self.calc_knowledge_discontinuities(logit_loss, hs)
+        torch.cuda.empty_cache()
         if return_outputs:
             return torch.sum(logit_loss) + self.lam * kd_score, outputs
         return torch.sum(logit_loss) + self.lam * kd_score
@@ -126,6 +134,10 @@ training_args = Seq2SeqTrainingArguments(
     push_to_hub=True,
 )
 trainer = SummarizationTrainer(
+    kd=options.kd,
+    alpha=options.alpha,
+    beta=options.beta,
+    lam=options.lam,
     model=model,
     args=training_args,
     train_dataset=train_dataset,
