@@ -29,6 +29,7 @@ options = parser.parse_args()
 
 # create the evaluation function
 rouge_metric = evaluate.load("rouge")
+bleu_metric = evaluate.load("bleu")
 
 # create the tokenizer and model 
 tokenizer = AutoTokenizer.from_pretrained(options.model_name)
@@ -40,17 +41,25 @@ if "gpt2" in options.model_name:
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     # perform argmax to get the token ids
-    predictions = np.argmax(predictions, axis=2)
+    # predictions = np.argmax(predictions, axis=2)
     decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
-    result = rouge_metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=True)
+    result = bleu_metric.compute(predictions=decoded_preds, references=decoded_labels)
 
     prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in predictions]
     result["gen_len"] = np.mean(prediction_lens)
 
     return {k: round(v, 4) for k, v in result.items()}
+
+def preprocess_logits_for_metrics(logits, labels):
+    """
+    Original Trainer may have a memory leak. 
+    This is a workaround to avoid storing too many tensors that are not needed.
+    """
+    pred_ids = torch.argmax(logits, dim=-1)
+    return pred_ids
 
 
 class SummarizationTrainer(Trainer):
@@ -76,7 +85,7 @@ class SummarizationTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         # check if the model is an encoder-decoder model
         ed = model.module.config.is_encoder_decoder
-        if not self.regularization:
+        if not self.regularization or return_outputs:
             return super().compute_loss(model, inputs, return_outputs)
         labels = inputs.get("labels")
         # get all of the hidden states and output from the model
@@ -116,17 +125,16 @@ class SummarizationTrainer(Trainer):
 
 
 train_dataset, valid_dataset, test_dataset = preprocess_dataset("cnn_dailymail", tokenizer)
-train_dataset = train_dataset.select(range(10))
 if "gpt2" in options.model_name:
     model = GPT2LMHeadModel.from_pretrained(options.model_name)
 else:
     model = AutoModelForSeq2SeqLM.from_pretrained(options.model_name)
 training_args = Seq2SeqTrainingArguments(
     output_dir=f"sum-cnn{'-kd' if options.kd else ''}",
-    per_device_train_batch_size=8,
-    gradient_accumulation_steps=2,
+    per_device_train_batch_size=4,
+    # gradient_accumulation_steps=1,
     per_device_eval_batch_size=8,
-    eval_accumulation_steps=1,
+    eval_accumulation_steps=2,
     learning_rate=options.learning_rate,
     num_train_epochs=options.epochs,
     evaluation_strategy="epoch",
@@ -146,6 +154,7 @@ trainer = SummarizationTrainer(
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=valid_dataset,
-    compute_metrics=compute_metrics
+    compute_metrics=compute_metrics,
+    preprocess_logits_for_metrics=preprocess_logits_for_metrics,
 )
 trainer.train()
