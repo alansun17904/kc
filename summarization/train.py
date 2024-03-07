@@ -116,17 +116,21 @@ class SummarizationTrainer(Trainer):
 
 
 train_dataset, valid_dataset, test_dataset = preprocess_dataset("cnn_dailymail", tokenizer)
+train_dataset = train_dataset.select(range(10))
 if "gpt2" in options.model_name:
     model = GPT2LMHeadModel.from_pretrained(options.model_name)
 else:
     model = AutoModelForSeq2SeqLM.from_pretrained(options.model_name)
 training_args = Seq2SeqTrainingArguments(
     output_dir=f"sum-cnn{'-kd' if options.kd else ''}",
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=8,
     gradient_accumulation_steps=2,
+    per_device_eval_batch_size=8,
+    eval_accumulation_steps=1,
     learning_rate=options.learning_rate,
     num_train_epochs=options.epochs,
     evaluation_strategy="epoch",
+    # eval_steps=2,
     predict_with_generate=True,
     weight_decay=options.weight_decay,
     hub_token=os.environ.get("HUB_TOKEN"),
