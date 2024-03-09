@@ -12,11 +12,14 @@ def preprocess_dataset(dataset_name, tokenizer):
     # TODO: for t5, we need to add the prefix "summarize: " to the target text
     def preprocess_batch(examples):
         inputs = ["summarize: " + doc for doc in examples["article"]]
+        input_lens = [len(v) for v in inputs]
         model_inputs = tokenizer(inputs, truncation=True, padding="max_length")
 
         labels = tokenizer(text_target=examples["highlights"], truncation=True, padding="max_length")
 
         model_inputs["labels"] = labels["input_ids"]
+        
+        model_inputs["s_idx"] = [v + 2 for v in input_lens]
         return model_inputs
 
 
