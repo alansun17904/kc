@@ -1,6 +1,6 @@
-# Certified Robustness via *Knowledge Continuity*
+# ![Certified Robustness via *Knowledge Continuity](https://arxiv.org/pdf/2411.01644)*
 
-This repository is the official implementation of the experiments in *Achieving Domain-Independent Certified Robustness via Knowledge Continuity*. 
+This repository is the official implementation of the experiments in *Achieving Domain-Independent Certified Robustness via Knowledge Continuity* [NeurIPS '24]. 
 - *Knowledge continuity* reframes robustness as stability of a model's loss with respect to its hidden representations.
 - Across input domains (continuous, discrete, non-metrizable), *knowledge continuity* provably certifies robustness of neural networks.
 - *Knowledge continuity* can be provably achieved without compromising inferential performance.
