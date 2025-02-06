@@ -1,4 +1,4 @@
-# ![Certified Robustness via *Knowledge Continuity](https://arxiv.org/pdf/2411.01644)*
+# [Certified Robustness via *Knowledge Continuity*](https://arxiv.org/pdf/2411.01644)
 
 This repository is the official implementation of the experiments in *Achieving Domain-Independent Certified Robustness via Knowledge Continuity* [NeurIPS '24]. 
 - *Knowledge continuity* reframes robustness as stability of a model's loss with respect to its hidden representations.
